@@ -1,0 +1,32 @@
+{
+  "name": "crypto-signal-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx tests/adx.test.ts && tsx tests/divergence.test.ts && tsx tests/rsi.test.ts && tsx tests/macd.test.ts && tsx tests/bollinger.test.ts && tsx tests/ema.test.ts && tsx tests/fvg.test.ts && tsx tests/orderBlock.test.ts && tsx tests/marketStructure.test.ts && tsx tests/liquiditySweep.test.ts && tsx tests/volume.test.ts && tsx tests/supportResistance.test.ts && tsx tests/volumeProfile.test.ts && tsx tests/atr.test.ts && tsx tests/scoring.test.ts && tsx tests/backtest.test.ts"
+  },
+  "dependencies": {
+    "lightweight-charts": "^4.2.1",
+    "next": "^14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "swr": "^2.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.15",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.6",
+    "tsx": "^4.22.4",
+    "typescript": "^5.5.3"
+  }
+}
