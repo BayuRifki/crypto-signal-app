@@ -1,5 +1,5 @@
 import type { Candle } from './utils';
-import { computeSignal, type Signal, type SignalAction } from './signal';
+import { computeSignal, type Signal, type SignalAction, type SignalWeights } from './signal';
 
 export type BacktestTrade = {
   index: number;
@@ -31,10 +31,13 @@ export type BacktestMetrics = {
   totalReturnPct: number;
   maxDrawdownPct: number;
   sharpeRatio: number;
+  sortinoRatio: number;
   avgBarsHeld: number;
   buyCount: number;
   sellCount: number;
   holdCount: number;
+  buyAndHoldReturnPct: number;
+  buyAndHoldSharpe: number;
   byConfidence: { range: string; trades: number; winRate: number }[];
   byAction: { action: SignalAction; trades: number; winRate: number; avgPnl: number }[];
   equityCurve: { t: number; equity: number }[];
@@ -57,14 +60,30 @@ export type BacktestOptions = {
   initialCapital?: number;
   /** Skip trading in ranging regime. */
   skipRanging?: boolean;
+  /** Bars per year for Sharpe annualization. If omitted, derived from interval. */
+  barsPerYear?: number;
+  /** Chart interval string (e.g. '1h', '4h', '1d') for deriving barsPerYear. */
+  interval?: string;
+  /** Optional weight overrides passed to computeSignal. */
+  weights?: Partial<SignalWeights>;
 };
+
+const BARS_PER_YEAR: Record<string, number> = {
+  '1m': 525600, '5m': 105120, '15m': 35040,
+  '1h': 8760, '4h': 2190, '1d': 365, '1w': 52,
+};
+
+const RISK_FREE_RATE_ANNUAL = 0.045;
 
 const DEFAULT_OPTS: Required<BacktestOptions> = {
   minConfidence: 0,
   maxLookahead: 50,
-  cooldown: 0,
+  cooldown: 7,
   initialCapital: 10000,
   skipRanging: false,
+  barsPerYear: 365,
+  interval: '1d',
+  weights: {},
 };
 
 const exitTrade = (
@@ -78,20 +97,49 @@ const exitTrade = (
 ): { exitIndex: number; exitPrice: number; exitReason: BacktestTrade['exitReason']; pnlPct: number; barsHeld: number } => {
   for (let j = entryIndex + 1; j <= Math.min(entryIndex + maxLookahead, candles.length - 1); j++) {
     const c = candles[j];
+    const open = c.open;
+
+    // Intrabar SL/TP detection with open-gap logic:
+    // If open gaps past SL or TP, that level was hit at the open.
+    // Otherwise check low/high as usual.
+    let hitSL = false;
+    let hitTP = false;
+
     if (action === 'BUY') {
-      if (c.low <= sl) {
-        return { exitIndex: j, exitPrice: sl, exitReason: 'sl', pnlPct: ((sl - entry) / entry) * 100, barsHeld: j - entryIndex };
-      }
-      if (c.high >= tp) {
-        return { exitIndex: j, exitPrice: tp, exitReason: 'tp', pnlPct: ((tp - entry) / entry) * 100, barsHeld: j - entryIndex };
+      // BUY: SL is below entry, TP is above entry
+      if (open <= sl) hitSL = true;
+      else if (open >= tp) hitTP = true;
+      else {
+        hitSL = c.low <= sl;
+        hitTP = c.high >= tp;
       }
     } else {
-      if (c.high >= sl) {
-        return { exitIndex: j, exitPrice: sl, exitReason: 'sl', pnlPct: ((entry - sl) / entry) * 100, barsHeld: j - entryIndex };
+      // SELL: SL is above entry, TP is below entry
+      if (open >= sl) hitSL = true;
+      else if (open <= tp) hitTP = true;
+      else {
+        hitSL = c.high >= sl;
+        hitTP = c.low <= tp;
       }
-      if (c.low <= tp) {
-        return { exitIndex: j, exitPrice: tp, exitReason: 'tp', pnlPct: ((entry - tp) / entry) * 100, barsHeld: j - entryIndex };
+    }
+
+    if (hitSL && hitTP) {
+      // Both hit on same bar — determine which was hit first
+      // If open gapped past both (rare), open distance decides
+      const openDistSL = action === 'BUY' ? Math.abs(open - sl) : Math.abs(sl - open);
+      const openDistTP = action === 'BUY' ? Math.abs(tp - open) : Math.abs(open - tp);
+      if (openDistTP < openDistSL) {
+        // TP was nearer to open → TP hit first
+        return { exitIndex: j, exitPrice: tp, exitReason: 'tp', pnlPct: action === 'BUY' ? ((tp - entry) / entry) * 100 : ((entry - tp) / entry) * 100, barsHeld: j - entryIndex };
       }
+      // SL nearer (or equidistant) → SL first (conservative)
+      return { exitIndex: j, exitPrice: sl, exitReason: 'sl', pnlPct: action === 'BUY' ? ((sl - entry) / entry) * 100 : ((entry - sl) / entry) * 100, barsHeld: j - entryIndex };
+    }
+    if (hitSL) {
+      return { exitIndex: j, exitPrice: sl, exitReason: 'sl', pnlPct: action === 'BUY' ? ((sl - entry) / entry) * 100 : ((entry - sl) / entry) * 100, barsHeld: j - entryIndex };
+    }
+    if (hitTP) {
+      return { exitIndex: j, exitPrice: tp, exitReason: 'tp', pnlPct: action === 'BUY' ? ((tp - entry) / entry) * 100 : ((entry - tp) / entry) * 100, barsHeld: j - entryIndex };
     }
   }
   const lastIdx = Math.min(entryIndex + maxLookahead, candles.length - 1);
@@ -111,14 +159,28 @@ const computeDrawdown = (equity: { t: number; equity: number }[]): number => {
   return maxDD;
 };
 
-const computeSharpe = (returns: number[]): number => {
+const computeSharpe = (returns: number[], barsPerYear: number): number => {
   if (returns.length < 2) return 0;
-  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((acc, r) => acc + (r - mean) ** 2, 0) / returns.length;
+  const rfPerBar = RISK_FREE_RATE_ANNUAL / barsPerYear;
+  const excessReturns = returns.map(r => r - rfPerBar);
+  const mean = excessReturns.reduce((a, b) => a + b, 0) / excessReturns.length;
+  const variance = excessReturns.reduce((acc, r) => acc + (r - mean) ** 2, 0) / excessReturns.length;
   const std = Math.sqrt(variance);
   if (std === 0) return 0;
-  // Annualization factor: assume 252 daily bars; for other TFs scale accordingly
-  return (mean / std) * Math.sqrt(252);
+  return (mean / std) * Math.sqrt(barsPerYear);
+};
+
+const computeSortino = (returns: number[], barsPerYear: number): number => {
+  if (returns.length < 2) return 0;
+  const rfPerBar = RISK_FREE_RATE_ANNUAL / barsPerYear;
+  const excessReturns = returns.map(r => r - rfPerBar);
+  const mean = excessReturns.reduce((a, b) => a + b, 0) / excessReturns.length;
+  const downsideReturns = excessReturns.filter(r => r < 0);
+  if (downsideReturns.length === 0) return mean > 0 ? Infinity : 0;
+  const downsideVariance = downsideReturns.reduce((acc, r) => acc + r ** 2, 0) / excessReturns.length;
+  const downsideDev = Math.sqrt(downsideVariance);
+  if (downsideDev === 0) return 0;
+  return (mean / downsideDev) * Math.sqrt(barsPerYear);
 };
 
 const confidenceBucket = (c: number): string => {
@@ -147,6 +209,10 @@ export const runBacktest = (
   options: BacktestOptions = {}
 ): BacktestResult | null => {
   const opts = { ...DEFAULT_OPTS, ...options };
+  // Derive barsPerYear from interval if not explicitly set
+  const barsPerYear = opts.barsPerYear !== DEFAULT_OPTS.barsPerYear
+    ? opts.barsPerYear
+    : BARS_PER_YEAR[opts.interval] ?? 365;
   if (candles.length < 250) return null;
 
   const start = performance.now();
@@ -161,7 +227,7 @@ export const runBacktest = (
   for (let i = 210; i < candles.length - opts.maxLookahead; i++) {
     if (i - lastExitIndex <= opts.cooldown) continue;
     const slice = candles.slice(0, i + 1);
-    const sig: Signal | null = computeSignal(slice);
+    const sig: Signal | null = computeSignal(slice, { weights: opts.weights });
     if (!sig) continue;
 
     holdCount++;
@@ -219,6 +285,19 @@ export const runBacktest = (
   const totalLossPct = Math.abs(losses.reduce((a, t) => a + t.pnlPct, 0));
   const returns = trades.map((t) => t.pnlPct / 100);
 
+  const buyAndHoldReturnPct = candles.length > 1
+    ? ((candles[candles.length - 1].close - candles[210].close) / candles[210].close) * 100
+    : 0;
+
+  const signalStart = 210;
+  const signalEnd = candles.length - 1;
+  const bhBars = signalEnd - signalStart;
+  const bhBarReturns: number[] = [];
+  for (let i = signalStart + 1; i <= signalEnd; i++) {
+    bhBarReturns.push((candles[i].close - candles[i - 1].close) / candles[i - 1].close);
+  }
+  const buyAndHoldSharpe = computeSharpe(bhBarReturns, barsPerYear);
+
   const byConfidenceMap = new Map<string, { trades: number; wins: number }>();
   for (const t of trades) {
     const range = confidenceBucket(t.confidence);
@@ -262,7 +341,10 @@ export const runBacktest = (
     profitFactor: totalLossPct > 0 ? totalWinPct / totalLossPct : totalWinPct > 0 ? Infinity : 0,
     totalReturnPct: ((runningEquity - opts.initialCapital) / opts.initialCapital) * 100,
     maxDrawdownPct: computeDrawdown(equity),
-    sharpeRatio: computeSharpe(returns),
+    sharpeRatio: computeSharpe(returns, barsPerYear),
+    sortinoRatio: computeSortino(returns, barsPerYear),
+    buyAndHoldReturnPct,
+    buyAndHoldSharpe,
     avgBarsHeld: trades.reduce((a, t) => a + t.barsHeld, 0) / trades.length,
     buyCount,
     sellCount,
@@ -292,11 +374,145 @@ const emptyMetrics = (buy: number, sell: number, hold: number): BacktestMetrics 
   totalReturnPct: 0,
   maxDrawdownPct: 0,
   sharpeRatio: 0,
+  sortinoRatio: 0,
   avgBarsHeld: 0,
   buyCount: buy,
   sellCount: sell,
   holdCount: hold,
+  buyAndHoldReturnPct: 0,
+  buyAndHoldSharpe: 0,
   byConfidence: ['0-40', '40-60', '60-80', '80-100'].map((range) => ({ range, trades: 0, winRate: 0 })),
   byAction: ['BUY', 'SELL'].map((action) => ({ action: action as SignalAction, trades: 0, winRate: 0, avgPnl: 0 })),
   equityCurve: [],
 });
+
+export type MonteCarloResult = {
+  randomAvgWR: number;
+  randomAvgReturn: number;
+  randomAvgSharpe: number;
+  signalWR: number;
+  signalReturn: number;
+  signalSharpe: number;
+  pValue: number;
+  significant: boolean;
+};
+
+export const runMonteCarlo = (
+  candles: Candle[],
+  options: BacktestOptions & { simulations?: number } = {}
+): MonteCarloResult | null => {
+  const sims = options.simulations ?? 1000;
+  const opts = { ...DEFAULT_OPTS, ...options };
+  const barsPerYear = opts.barsPerYear !== DEFAULT_OPTS.barsPerYear
+    ? opts.barsPerYear
+    : BARS_PER_YEAR[opts.interval] ?? 365;
+
+  const signalResult = runBacktest(candles, options);
+  if (!signalResult || signalResult.trades.length < 3) return null;
+
+  const signalWR = signalResult.metrics.winRate;
+  const signalReturn = signalResult.metrics.totalReturnPct;
+  const signalSharpe = signalResult.metrics.sharpeRatio;
+
+  const startIdx = 210;
+  const endIdx = candles.length - opts.maxLookahead;
+  if (endIdx - startIdx < 50) return null;
+
+  let randomWRs: number[] = [];
+  let randomReturns: number[] = [];
+  let randomSharpes: number[] = [];
+
+  for (let s = 0; s < sims; s++) {
+    let equity = opts.initialCapital;
+    let wins = 0;
+    let totalTrades = 0;
+    const tradeReturns: number[] = [];
+    let idx = startIdx;
+
+    while (idx < endIdx) {
+      const action: 'BUY' | 'SELL' = Math.random() < 0.5 ? 'BUY' : 'SELL';
+      const holdBars = Math.floor(Math.random() * opts.maxLookahead) + 1;
+      const entryPrice = candles[idx].close;
+      const exitIdx = Math.min(idx + holdBars, candles.length - 1);
+      const exitPrice = candles[exitIdx].close;
+      const atrVal = Math.abs(candles[idx].close - candles[idx].open) * 2 || candles[idx].close * 0.01;
+
+      const slDist = atrVal * 2;
+      const tpDist = atrVal * 3;
+      let pnl: number;
+
+      if (action === 'BUY') {
+        const sl = entryPrice - slDist;
+        const tp = entryPrice + tpDist;
+        let hitSL = false;
+        let hitTP = false;
+        for (let j = idx + 1; j <= exitIdx; j++) {
+          if (candles[j].low <= sl) { hitSL = true; pnl = ((sl - entryPrice) / entryPrice) * 100; idx = j; break; }
+          if (candles[j].high >= tp) { hitTP = true; pnl = ((tp - entryPrice) / entryPrice) * 100; idx = j; break; }
+        }
+        if (!hitSL && !hitTP) { pnl = ((exitPrice - entryPrice) / entryPrice) * 100; idx = exitIdx; }
+      } else {
+        const sl = entryPrice + slDist;
+        const tp = entryPrice - tpDist;
+        let hitSL = false;
+        let hitTP = false;
+        for (let j = idx + 1; j <= exitIdx; j++) {
+          if (candles[j].high >= sl) { hitSL = true; pnl = ((entryPrice - sl) / entryPrice) * 100; idx = j; break; }
+          if (candles[j].low <= tp) { hitTP = true; pnl = ((entryPrice - tp) / entryPrice) * 100; idx = j; break; }
+        }
+        if (!hitSL && !hitTP) { pnl = ((entryPrice - exitPrice) / entryPrice) * 100; idx = exitIdx; }
+      }
+
+      if (pnl! > 0) wins++;
+      totalTrades++;
+      tradeReturns.push(pnl! / 100);
+      equity *= 1 + pnl! / 100;
+      idx += opts.cooldown + 1;
+    }
+
+    if (totalTrades === 0) continue;
+    randomWRs.push((wins / totalTrades) * 100);
+    randomReturns.push(((equity - opts.initialCapital) / opts.initialCapital) * 100);
+    const mean = tradeReturns.reduce((a, b) => a + b, 0) / tradeReturns.length;
+    const variance = tradeReturns.reduce((acc, r) => acc + (r - mean) ** 2, 0) / tradeReturns.length;
+    const std = Math.sqrt(variance);
+    randomSharpes.push(std > 0 ? (mean / std) * Math.sqrt(barsPerYear) : 0);
+  }
+
+  if (randomSharpes.length === 0) return null;
+
+  const avgRandomWR = randomWRs.reduce((a, b) => a + b, 0) / randomWRs.length;
+  const avgRandomReturn = randomReturns.reduce((a, b) => a + b, 0) / randomReturns.length;
+  const avgRandomSharpe = randomSharpes.reduce((a, b) => a + b, 0) / randomSharpes.length;
+
+  const randomSharpesArr = randomSharpes;
+  const meanRS = avgRandomSharpe;
+  const stdRS = Math.sqrt(randomSharpesArr.reduce((acc, s) => acc + (s - meanRS) ** 2, 0) / randomSharpesArr.length);
+  const tStat = stdRS > 0 ? (signalSharpe - meanRS) / (stdRS / Math.sqrt(randomSharpesArr.length)) : 0;
+  const pValue = tStat > 0 ? Math.max(0, 1 - 0.5 * (1 + erf(tStat / Math.sqrt(2)))) : 1;
+
+  return {
+    randomAvgWR: avgRandomWR,
+    randomAvgReturn: avgRandomReturn,
+    randomAvgSharpe: avgRandomSharpe,
+    signalWR,
+    signalReturn,
+    signalSharpe,
+    pValue,
+    significant: pValue < 0.05,
+  };
+};
+
+function erf(x: number): number {
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const t = 1 / (1 + p * x);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return sign * y;
+}

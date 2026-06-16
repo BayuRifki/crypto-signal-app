@@ -1,13 +1,7 @@
 'use client';
 import { Icon } from './Icon';
-import { fmt } from '../lib/utils';
+import { fmt, fmtPrice } from '../lib/utils';
 import type { Signal } from '../lib/signal';
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};
 
 type Props = { signal: Signal | null };
 

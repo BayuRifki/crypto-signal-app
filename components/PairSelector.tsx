@@ -1,17 +1,34 @@
 'use client';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSymbols } from '../lib/hooks/useSymbols';
+import { POPULAR_USDT_PAIRS, POPULAR_TRENDING } from '../lib/popularPairs';
+import type { ExchangeId, SymbolInfo } from '../lib/exchanges/types';
 import { Icon } from './Icon';
+import { fmtPrice } from '../lib/utils';
 
 type Props = {
   value: string;
   onChange: (s: string) => void;
   lastPrice?: number | null;
   change24h?: number | null;
+  exchange: ExchangeId;
 };
 
-export default function PairSelector({ value, onChange, lastPrice, change24h }: Props) {
-  const { symbols, isLoading } = useSymbols();
+const dedupe = (pairs: SymbolInfo[]): SymbolInfo[] => {
+  const seen = new Set<string>();
+  const out: SymbolInfo[] = [];
+  for (const p of pairs) {
+    if (seen.has(p.symbol)) continue;
+    seen.add(p.symbol);
+    out.push(p);
+  }
+  return out;
+};
+
+const MAX_RENDER = 5000;
+
+export default function PairSelector({ value, onChange, lastPrice, change24h, exchange }: Props) {
+  const { symbols, isLoading, error, refresh } = useSymbols(exchange);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -24,13 +41,27 @@ export default function PairSelector({ value, onChange, lastPrice, change24h }: 
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // Source of truth: the live exchange list.
+  // Fallback to popular only when fetch is in flight, errored, or returned empty.
+  const useFallback = isLoading || !!error || (symbols && symbols.length === 0);
+  const source: SymbolInfo[] = useMemo(() => {
+    const apiList = (symbols ?? []).filter((s) => s.quote === 'USDT');
+    if (apiList.length > 0) return apiList;
+    return POPULAR_USDT_PAIRS;
+  }, [symbols, isLoading, error]);
+
+  // Always include the current value so it's visible even if not in the list
+  const display: SymbolInfo[] = useMemo(() => {
+    if (source.some((s) => s.symbol === value)) return source;
+    const base = value.endsWith('USDT') ? value.slice(0, -4) : value;
+    return [{ symbol: value, base, quote: 'USDT' }, ...source];
+  }, [source, value]);
+
   const filtered = useMemo(() => {
     const q = query.toUpperCase().trim();
-    if (!q) return symbols.slice(0, 80);
-    return symbols.filter((s) => s.symbol.includes(q) || s.base.includes(q)).slice(0, 80);
-  }, [symbols, query]);
-
-  const trending = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+    if (!q) return display.slice(0, MAX_RENDER);
+    return display.filter((s) => s.symbol.includes(q) || s.base.includes(q)).slice(0, MAX_RENDER);
+  }, [display, query]);
 
   return (
     <div ref={wrapRef} className="relative">
@@ -45,7 +76,7 @@ export default function PairSelector({ value, onChange, lastPrice, change24h }: 
           <div className="text-sm font-bold text-fg leading-tight">{value}</div>
           {lastPrice !== undefined && lastPrice !== null && (
             <div className="flex items-center gap-1.5 text-2xs leading-tight">
-              <span className="text-fg tabular">{formatPrice(lastPrice)}</span>
+              <span className="text-fg tabular">{fmtPrice(lastPrice)}</span>
               {change24h !== undefined && change24h !== null && (
                 <span className={change24h >= 0 ? 'text-buy' : 'text-sell'}>
                   {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
@@ -71,11 +102,12 @@ export default function PairSelector({ value, onChange, lastPrice, change24h }: 
               />
             </div>
           </div>
+
           {!query && (
             <div className="p-2 border-b border-line">
               <div className="text-2xs font-semibold text-fg-dim uppercase tracking-wider px-2 py-1">Trending</div>
               <div className="flex flex-wrap gap-1 px-1">
-                {trending.map((s) => (
+                {POPULAR_TRENDING.map((s) => (
                   <button
                     key={s}
                     onClick={() => { onChange(s); setOpen(false); setQuery(''); }}
@@ -87,9 +119,39 @@ export default function PairSelector({ value, onChange, lastPrice, change24h }: 
               </div>
             </div>
           )}
-          <div className="max-h-72 overflow-y-auto scrollbar-thin">
-            {isLoading && (
-              <div className="p-4 text-xs text-fg-dim text-center">Loading pairs…</div>
+
+          <div className="px-3 py-1.5 text-2xs text-fg-dim flex items-center justify-between border-t border-b border-line">
+            <span>
+              {isLoading && (!symbols || symbols.length === 0)
+                ? `Loading ${exchange} pairs…`
+                : useFallback
+                  ? `Popular list · ${source.length} pairs (live fetch unavailable)`
+                  : `${source.length} pairs from ${exchange}`}
+            </span>
+            <div className="flex items-center gap-2">
+              {error && !isLoading && (
+                <span className="text-warn" title={error.message}>
+                  <Icon.Info size={11} className="inline -mt-0.5 mr-0.5" />
+                  using fallback
+                </span>
+              )}
+              <button
+                onClick={() => refresh()}
+                disabled={isLoading}
+                className="text-fg-dim hover:text-fg transition disabled:opacity-40"
+                title="Refresh pairs from exchange"
+              >
+                <Icon.Refresh size={11} className={isLoading ? 'animate-spin-slow' : ''} />
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto scrollbar-thin">
+            {isLoading && source.length === 0 && (
+              <div className="p-4 text-xs text-fg-dim text-center flex flex-col items-center gap-2">
+                <div className="w-5 h-5 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
+                Fetching from {exchange}…
+              </div>
             )}
             {filtered.map((s) => (
               <button
@@ -120,9 +182,3 @@ export default function PairSelector({ value, onChange, lastPrice, change24h }: 
     </div>
   );
 }
-
-const formatPrice = (n: number) => {
-  if (n >= 1000) return n.toFixed(2);
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};

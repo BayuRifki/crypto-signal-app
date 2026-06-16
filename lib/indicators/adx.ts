@@ -76,6 +76,14 @@ export const adx = (candles: Candle[], period = 14): ADXPoint[] => {
 
 export type Regime = 'trending' | 'ranging' | 'transitional';
 
+export type RegimeResult = {
+  regime: Regime;
+  bias: 'bullish' | 'bearish' | 'neutral';
+  strength: number;   // 0-100, how confident we are in the regime classification
+  sideways: boolean;   // explicit sideways flag (subset of ranging)
+};
+
+/** Legacy simple classifier — kept for backward compat / tests */
 export const classifyRegime = (adxVal: number | null, pdi: number | null, ndi: number | null): { regime: Regime; bias: 'bullish' | 'bearish' | 'neutral' } => {
   if (adxVal === null) return { regime: 'transitional', bias: 'neutral' };
   if (adxVal >= 25) {
@@ -84,4 +92,105 @@ export const classifyRegime = (adxVal: number | null, pdi: number | null, ndi: n
   }
   if (adxVal < 20) return { regime: 'ranging', bias: 'neutral' };
   return { regime: 'transitional', bias: pdi !== null && ndi !== null ? (pdi > ndi ? 'bullish' : pdi < ndi ? 'bearish' : 'neutral') : 'neutral' };
+};
+
+/**
+ * Multi-factor regime classifier.
+ * Combines ADX + EMA spread + BB width + EMA50 cross frequency + EMA50 slope
+ * to produce a richer regime classification that correctly identifies sideways/ranging
+ * markets even when ADX lags.
+ *
+ * Scoring system (rangingScore 0-100):
+ *   ADX component:      0-30 pts  (low ADX → high ranging score)
+ *   EMA spread:         0-25 pts  (tight spread → high ranging score)
+ *   BB width:           0-20 pts  (narrow bands → high ranging score)
+ *   Cross frequency:    0-15 pts  (many crosses → high ranging score)
+ *   EMA50 slope:        0-10 pts  (flat slope → high ranging score)
+ *
+ * Thresholds: rangingScore >= 55 → ranging, <= 30 → trending, else transitional
+ */
+export const classifyRegimeRich = (
+  adxVal: number | null,
+  pdi: number | null,
+  ndi: number | null,
+  emaSpreadPct: number | null,
+  bbWidth: number | null,
+  crossCount: number,
+  ema50Slope: number | null,
+): RegimeResult => {
+  if (adxVal === null) return { regime: 'transitional', bias: 'neutral', strength: 0, sideways: false };
+
+  let rangingScore = 0;
+
+  // --- ADX component (0-30) ---
+  // ADX < 15 → 30pts, ADX 15-20 → 20pts, ADX 20-25 → 10pts, ADX 25-30 → 5pts, ADX > 30 → 0
+  if (adxVal < 15) rangingScore += 30;
+  else if (adxVal < 20) rangingScore += 20 + 10 * ((20 - adxVal) / 5);
+  else if (adxVal < 25) rangingScore += 10 * ((25 - adxVal) / 5);
+  else if (adxVal < 30) rangingScore += 5 * ((30 - adxVal) / 5);
+
+  // --- EMA spread component (0-25) ---
+  // emaSpreadPct <= 0.3% → 25pts, <= 0.8% → 15pts, <= 1.5% → 8pts, > 1.5% → 0
+  if (emaSpreadPct !== null) {
+    if (emaSpreadPct <= 0.3) rangingScore += 25;
+    else if (emaSpreadPct <= 0.8) rangingScore += 15 + 10 * ((0.8 - emaSpreadPct) / 0.5);
+    else if (emaSpreadPct <= 1.5) rangingScore += 8 * ((1.5 - emaSpreadPct) / 0.7);
+  }
+
+  // --- BB width component (0-20) ---
+  // bbWidth <= 3% → 20pts, <= 6% → 14pts, <= 10% → 6pts, > 10% → 0
+  if (bbWidth !== null) {
+    if (bbWidth <= 3) rangingScore += 20;
+    else if (bbWidth <= 6) rangingScore += 14 + 6 * ((6 - bbWidth) / 3);
+    else if (bbWidth <= 10) rangingScore += 6 * ((10 - bbWidth) / 4);
+  }
+
+  // --- Cross frequency component (0-15) ---
+  // crosses in last 20 bars: >= 5 → 15pts, >= 3 → 10pts, >= 2 → 5pts, < 2 → 0
+  if (crossCount >= 5) rangingScore += 15;
+  else if (crossCount >= 3) rangingScore += 10 + 5 * ((crossCount - 3) / 2);
+  else if (crossCount >= 2) rangingScore += 5;
+
+  // --- EMA50 slope component (0-10) ---
+  // flat slope (|slope| < 0.05%) → 10pts, < 0.15% → 5pts, else 0
+  if (ema50Slope !== null) {
+    const absSlope = Math.abs(ema50Slope);
+    if (absSlope < 0.05) rangingScore += 10;
+    else if (absSlope < 0.15) rangingScore += 5 + 5 * ((0.15 - absSlope) / 0.1);
+  }
+
+  // --- Classify ---
+  rangingScore = Math.round(Math.min(100, Math.max(0, rangingScore)));
+  const sideways = rangingScore >= 60;
+
+  let regime: Regime;
+  if (rangingScore >= 55) regime = 'ranging';
+  else if (rangingScore <= 30) regime = 'trending';
+  else regime = 'transitional';
+
+  // Bias from DI
+  let bias: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+  if (pdi !== null && ndi !== null) {
+    if (regime === 'ranging' || sideways) {
+      // In ranging, suppress bias unless DI difference is very large
+      const diDiff = Math.abs(pdi - ndi);
+      if (diDiff > 15) bias = pdi > ndi ? 'bullish' : 'bearish';
+    } else {
+      bias = pdi > ndi ? 'bullish' : pdi < ndi ? 'bearish' : 'neutral';
+    }
+  }
+
+  // Strength: how confident we are
+  // For trending: higher ADX + wider spread → stronger
+  // For ranging: higher rangingScore → stronger
+  let strength: number;
+  if (regime === 'trending') {
+    strength = Math.min(100, Math.round(adxVal * 2 + (emaSpreadPct ?? 0) * 10));
+  } else if (regime === 'ranging') {
+    strength = rangingScore;
+  } else {
+    strength = Math.round(50 - Math.abs(rangingScore - 42.5));
+  }
+
+  return { regime, bias, strength: Math.min(100, Math.max(0, strength)), sideways };
 };

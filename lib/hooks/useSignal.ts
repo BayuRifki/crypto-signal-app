@@ -1,11 +1,16 @@
 'use client';
 import { useMemo, useEffect, useRef } from 'react';
-import { computeSignal, type Signal } from '../signal';
+import { computeSignal, type Signal, type SignalWeights } from '../signal';
 import { logSignal } from '../signalHistory';
 import type { Candle } from '../utils';
 
-export const useSignal = (candles: Candle[], symbol?: string, interval?: string): Signal | null => {
-  const sig = useMemo(() => computeSignal(candles), [candles]);
+export const useSignal = (
+  candles: Candle[],
+  weights?: Partial<SignalWeights>,
+  symbol?: string,
+  interval?: string
+): Signal | null => {
+  const sig = useMemo(() => computeSignal(candles, { weights }), [candles, weights]);
   const prevSigRef = useRef<Signal | null>(null);
 
   useEffect(() => {

@@ -3,7 +3,8 @@ import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import type { SignalAction } from '../lib/signal';
 import Badge from './Badge';
-import type { Ticker24h } from '../lib/binance';
+import type { Ticker24h } from '../lib/exchanges/types';
+import { fmtPrice } from '../lib/utils';
 
 type Props = {
   symbol: string;
@@ -21,12 +22,6 @@ const ACTION_STYLE: Record<SignalAction, { bg: string; text: string; border: str
   BUY: { bg: 'bg-buy/20', text: 'text-buy', border: 'border-buy/40', glow: 'shadow-glow-buy', dot: 'bg-buy' },
   SELL: { bg: 'bg-sell/20', text: 'text-sell', border: 'border-sell/40', glow: 'shadow-glow-sell', dot: 'bg-sell' },
   HOLD: { bg: 'bg-hold/20', text: 'text-hold', border: 'border-hold/40', glow: '', dot: 'bg-hold' },
-};
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
 };
 
 const fmtVol = (n: number) => {

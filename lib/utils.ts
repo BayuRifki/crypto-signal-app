@@ -41,6 +41,7 @@ export const ema = (values: number[], period: number): (number | null)[] => {
 
 export const stdev = (values: number[], period: number): (number | null)[] => {
   const out: (number | null)[] = [];
+  if (period <= 1) return new Array(values.length).fill(null);
   for (let i = 0; i < values.length; i++) {
     if (i < period - 1) {
       out.push(null);
@@ -48,7 +49,7 @@ export const stdev = (values: number[], period: number): (number | null)[] => {
     }
     const slice = values.slice(i - period + 1, i + 1);
     const mean = slice.reduce((a, b) => a + b, 0) / period;
-    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period;
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / (period - 1);
     out.push(Math.sqrt(variance));
   }
   return out;
@@ -69,6 +70,13 @@ export const fmt = (n: number | null | undefined, d = 2): string => {
 export const fmtPct = (n: number, d = 2): string => {
   if (Number.isNaN(n)) return '-';
   return `${n >= 0 ? '+' : ''}${n.toFixed(d)}%`;
+};
+
+export const fmtPrice = (n: number | null | undefined): string => {
+  if (n === null || n === undefined || Number.isNaN(n)) return '-';
+  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (Math.abs(n) >= 1) return n.toFixed(3);
+  return n.toFixed(6);
 };
 
 export const pctChange = (a: number, b: number): number => ((a - b) / b) * 100;

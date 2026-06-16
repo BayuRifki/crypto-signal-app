@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react';
 import { useKlines } from '../lib/hooks/useKlines';
 import { computeSignal, type SignalAction } from '../lib/signal';
 import { KEY_TIMEFRAMES } from './TimeframeTabs';
-import type { Interval } from '../lib/binance';
+import type { ExchangeId, Interval } from '../lib/exchanges/types';
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import { logSignal } from '../lib/signalHistory';
 
-type Props = { symbol: string; activeTf: Interval };
+type Props = { symbol: string; activeTf: Interval; exchange: ExchangeId };
 
 const ACTION_STYLES: Record<SignalAction, { ring: string; bg: string; text: string; dot: string }> = {
   BUY: { ring: 'border-buy/40', bg: 'bg-buy/10', text: 'text-buy', dot: 'bg-buy' },
@@ -16,8 +16,8 @@ const ACTION_STYLES: Record<SignalAction, { ring: string; bg: string; text: stri
   HOLD: { ring: 'border-line-strong', bg: 'bg-bg-elevated', text: 'text-fg-muted', dot: 'bg-fg-dim' },
 };
 
-const Row = ({ symbol, tf, activeTf, onResult }: { symbol: string; tf: Interval; activeTf: Interval; onResult: (s: SignalAction | null, score: number | null) => void }) => {
-  const { candles } = useKlines(symbol, tf, 300);
+const Row = ({ symbol, tf, activeTf, exchange, onResult }: { symbol: string; tf: Interval; activeTf: Interval; exchange: ExchangeId; onResult: (s: SignalAction | null, score: number | null) => void }) => {
+  const { candles } = useKlines(exchange, symbol, tf, 300);
   const [res, setRes] = useState<{ action: SignalAction | null; score: number | null }>({ action: null, score: null });
   useEffect(() => {
     if (candles.length < 210) return;
@@ -58,7 +58,7 @@ const Row = ({ symbol, tf, activeTf, onResult }: { symbol: string; tf: Interval;
   );
 };
 
-export default function MultiTimeframeRow({ symbol, activeTf }: Props) {
+export default function MultiTimeframeRow({ symbol, activeTf, exchange }: Props) {
   const [rows, setRows] = useState<Record<Interval, { action: SignalAction | null; score: number | null }>>({} as any);
 
   const valid = Object.values(rows).filter((r) => r.action);
@@ -88,6 +88,7 @@ export default function MultiTimeframeRow({ symbol, activeTf }: Props) {
             symbol={symbol}
             tf={tf}
             activeTf={activeTf}
+            exchange={exchange}
             onResult={(action, score) => setRows((r) => ({ ...r, [tf]: { action, score } }))}
           />
         ))}

@@ -6,6 +6,13 @@
   color-scheme: dark;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
+  --color-buy: #10b981;
+  --color-sell: #f43f5e;
+  --color-warn: #f59e0b;
+  --color-info: #0ea5e9;
+  --color-accent: #a78bfa;
+  --color-hold: #94a3b8;
+  --color-fg-muted: #64748b;
 }
 
 html, body {

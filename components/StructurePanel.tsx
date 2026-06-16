@@ -7,12 +7,7 @@ import type { MSSignal } from '../lib/indicators/marketStructure';
 import type { Sweep } from '../lib/indicators/liquiditySweep';
 import type { SRLevel } from '../lib/indicators/supportResistance';
 import { useState } from 'react';
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};
+import { fmtPrice } from '../lib/utils';
 
 type Props = {
   price: number;

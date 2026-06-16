@@ -2,12 +2,7 @@
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import type { Signal, SignalComponents } from '../lib/signal';
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};
+import { fmtPrice } from '../lib/utils';
 
 type Props = { signal: Signal | null };
 
@@ -83,6 +78,14 @@ export default function SignalCard({ signal }: Props) {
               )}
               {hasPoc && (
                 <span className="px-1.5 py-0.5 rounded text-2xs font-bold border bg-info/15 text-info border-info/30">POC</span>
+              )}
+              {signal.degraded && (
+                <span
+                  className="px-1.5 py-0.5 rounded text-2xs font-bold border bg-warn/15 text-warn border-warn/30"
+                  title={`Degraded: ${signal.degradedIndicators.length} indicator(s) failed — ${signal.degradedIndicators.slice(0, 5).join(', ')}`}
+                >
+                  DEG · {signal.degradedIndicators.length}
+                </span>
               )}
             </div>
             <div className={`flex items-center gap-2 ${actionMeta.color}`}>

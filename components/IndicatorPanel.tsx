@@ -2,14 +2,9 @@
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import type { Signal } from '../lib/signal';
+import { fmtPrice } from '../lib/utils';
 
 type Props = { signal: Signal | null };
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};
 
 const fmtSigned = (n: number, d = 2) => `${n >= 0 ? '+' : ''}${n.toFixed(d)}`;
 
@@ -88,16 +83,16 @@ export default function IndicatorPanel({ signal }: Props) {
   }
 
   const rsi = signal.rsiValue;
-  const rsiColor = rsi === null ? '#64748b' : rsi > 70 ? '#ef4444' : rsi < 30 ? '#10b981' : '#0ea5e9';
-  const rsiZones = [{ from: 0, to: 30, color: '#10b981' }, { from: 70, to: 100, color: '#ef4444' }];
+  const rsiColor = rsi === null ? 'var(--color-fg-muted)' : rsi > 70 ? '#ef4444' : rsi < 30 ? 'var(--color-buy)' : 'var(--color-info)';
+  const rsiZones = [{ from: 0, to: 30, color: 'var(--color-buy)' }, { from: 70, to: 100, color: '#ef4444' }];
 
   const bb = signal.bbPos;
-  const bbColor = bb === null ? '#64748b' : bb < 20 ? '#10b981' : bb > 80 ? '#ef4444' : '#0ea5e9';
+  const bbColor = bb === null ? 'var(--color-fg-muted)' : bb < 20 ? 'var(--color-buy)' : bb > 80 ? '#ef4444' : 'var(--color-info)';
   const macdHist = signal.macdHist;
-  const macdColor = (macdHist ?? 0) > 0 ? '#10b981' : '#ef4444';
-  const cvdColor = signal.cvdSlope >= 0 ? '#10b981' : '#ef4444';
+  const macdColor = (macdHist ?? 0) > 0 ? 'var(--color-buy)' : '#ef4444';
+  const cvdColor = signal.cvdSlope >= 0 ? 'var(--color-buy)' : '#ef4444';
   const rvol = signal.rvol;
-  const rvolColor = (rvol ?? 0) >= 1.5 ? '#10b981' : (rvol ?? 0) < 0.7 ? '#f59e0b' : '#94a3b8';
+  const rvolColor = (rvol ?? 0) >= 1.5 ? 'var(--color-buy)' : (rvol ?? 0) < 0.7 ? 'var(--color-warn)' : 'var(--color-hold)';
 
   return (
     <div className="card p-5">
@@ -148,13 +143,13 @@ export default function IndicatorPanel({ signal }: Props) {
         <Tooltip label="EMA 50 (medium-term trend)">
           <div>
             <div className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">EMA 50</div>
-            <div className="text-base font-mono font-bold text-warn tabular mt-0.5">{fmtPrice(signal.ema50 ?? NaN)}</div>
+            <div className="text-base font-mono font-bold text-warn tabular mt-0.5">{fmtPrice(signal.ema50)}</div>
           </div>
         </Tooltip>
         <Tooltip label="EMA 200 (long-term trend)">
           <div>
             <div className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">EMA 200</div>
-            <div className="text-base font-mono font-bold text-accent tabular mt-0.5">{fmtPrice(signal.ema200 ?? NaN)}</div>
+            <div className="text-base font-mono font-bold text-accent tabular mt-0.5">{fmtPrice(signal.ema200)}</div>
           </div>
         </Tooltip>
       </div>
@@ -164,7 +159,7 @@ export default function IndicatorPanel({ signal }: Props) {
           <span className="text-fg-dim cursor-help">ADX (14)</span>
         </Tooltip>
         <span className="font-mono font-bold tabular">
-          <span style={{ color: signal.adx === null ? '#64748b' : signal.adx >= 25 ? '#10b981' : signal.adx < 20 ? '#f59e0b' : '#94a3b8' }}>
+              <span style={{ color: signal.adx === null ? 'var(--color-fg-muted)' : signal.adx >= 25 ? 'var(--color-buy)' : signal.adx < 20 ? 'var(--color-warn)' : 'var(--color-hold)' }}>
             {signal.adx === null ? '-' : signal.adx.toFixed(0)}
           </span>
           {signal.adx !== null && (

@@ -2,12 +2,7 @@
 import { Icon } from './Icon';
 import type { Signal } from '../lib/signal';
 import Badge from './Badge';
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};
+import { fmtPrice } from '../lib/utils';
 
 type Props = { signal: Signal | null; onClick: () => void };
 

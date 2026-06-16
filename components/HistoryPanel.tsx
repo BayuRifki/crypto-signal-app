@@ -2,14 +2,9 @@
 import { useState, useEffect } from 'react';
 import { Icon } from './Icon';
 import { getSignalHistory, clearSignalHistory, type SignalHistoryEntry } from '../lib/signalHistory';
+import { fmtPrice } from '../lib/utils';
 
 type Props = { symbol?: string; interval?: string };
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
-};
 
 const fmtTime = (ts: number) => {
   const d = new Date(ts);

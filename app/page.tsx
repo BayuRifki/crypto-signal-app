@@ -20,14 +20,21 @@ import Tabs from '../components/Tabs';
 import { useKlines } from '../lib/hooks/useKlines';
 import { useTicker } from '../lib/hooks/useTicker';
 import { useSignal } from '../lib/hooks/useSignal';
-import type { Interval } from '../lib/binance';
+import { useCandleSource } from '../lib/hooks/useCandleSource';
+import { useWeightLab } from '../lib/hooks/useWeightLab';
+import type { ExchangeId, Interval } from '../lib/exchanges/types';
 import { supportResistance } from '../lib/indicators/supportResistance';
 import { Icon } from '../components/Icon';
+import ExchangeSelector from '../components/ExchangeSelector';
+import DemoToggle from '../components/DemoToggle';
+import WeightLabPanel from '../components/WeightLabPanel';
 
 const LAST_PAIRS_KEY = 'cs:lastPairs';
+const LAST_EXCHANGE_KEY = 'cs:lastExchange';
 const DEFAULT_PAIRS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
 
 export default function HomePage() {
+  const [exchange, setExchange] = useState<ExchangeId>('okx');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [interval, setInterval] = useState<Interval>('1h');
   const [showBB, setShowBB] = useState(true);
@@ -39,11 +46,12 @@ export default function HomePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [signalDrawerOpen, setSignalDrawerOpen] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [bottomTab, setBottomTab] = useState<'structure' | 'backtest' | 'history'>('structure');
+  const [bottomTab, setBottomTab] = useState<'structure' | 'backtest' | 'weightlab' | 'history'>('structure');
 
-  const { candles, isLoading: klinesLoading, refresh: refreshKlines, error: klinesError } = useKlines(symbol, interval, 500);
-  const { ticker, refresh: refreshTicker } = useTicker(symbol);
-  const signal = useSignal(candles, symbol, interval);
+  const { candles, isLoading: klinesLoading, refresh: refreshKlines, error: klinesError, isDemo, demoPreset, setDemoPreset, setDemoMode, realError } = useCandleSource(exchange, symbol, interval, 500);
+  const { ticker, refresh: refreshTicker } = useTicker(exchange, symbol);
+  const weightLab = useWeightLab();
+  const signal = useSignal(candles, weightLab.weights, symbol, interval);
   const srLevels = useMemo(() => {
     if (candles.length < 50) return [];
     const sr = supportResistance(candles, 100);
@@ -62,6 +70,10 @@ export default function HomePage() {
       localStorage.setItem(LAST_PAIRS_KEY, JSON.stringify(next));
     } catch {}
   }, [symbol]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LAST_EXCHANGE_KEY, exchange); } catch {}
+  }, [exchange]);
 
   const onRefresh = useCallback(() => {
     refreshKlines();
@@ -84,25 +96,43 @@ export default function HomePage() {
 
       <main className="max-w-[1600px] mx-auto px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
         <div className="flex flex-wrap items-center gap-2">
+          <ExchangeSelector value={exchange} onChange={setExchange} />
           <PairSelector
             value={symbol}
             onChange={setSymbol}
             lastPrice={ticker?.lastPrice ?? signal?.price ?? null}
             change24h={ticker?.priceChangePercent ?? null}
+            exchange={exchange}
           />
           <TimeframeTabs value={interval} onChange={setInterval} />
+          <div className="flex-1" />
+          <DemoToggle
+            isDemo={isDemo}
+            preset={demoPreset}
+            onToggle={setDemoMode}
+            onPresetChange={setDemoPreset}
+            realError={realError}
+          />
         </div>
 
         <KPIStrip symbol={symbol} signal={signal} ticker={ticker} interval={interval} />
 
-        {klinesError && (
-          <div className="card p-4 border-sell/40 text-sell text-sm flex items-center gap-2">
-            <Icon.Info size={14} />
-            Failed to load market data. Pull to refresh.
+        {realError && !isDemo && (
+          <div className="card p-4 border-warn/40 text-sm flex items-start gap-2">
+            <Icon.Info size={14} className="mt-0.5 flex-shrink-0 text-warn" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-warn">Live data unavailable from {exchange}</div>
+              <div className="text-2xs text-fg-muted mt-1 break-all">
+                {realError.message || 'Network or geo-block error. The exchange API may be blocked in your region.'}
+              </div>
+              <div className="text-2xs text-info mt-1.5">
+                Tip: Switch to <span className="font-bold">DEMO</span> mode in the top-right to explore with synthetic data.
+              </div>
+            </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 md:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-3 md:gap-4">
           <div className="space-y-3 md:space-y-4 min-w-0">
             <div className="card overflow-hidden">
               <div className="h-[55vh] min-h-[360px] max-h-[640px]">
@@ -129,16 +159,17 @@ export default function HomePage() {
               </div>
             </div>
 
-            <MultiTimeframeRow symbol={symbol} activeTf={interval} />
+            <MultiTimeframeRow symbol={symbol} activeTf={interval} exchange={exchange} />
 
             <div className="space-y-3">
               <Tabs
                 value={bottomTab}
-                onChange={(v) => setBottomTab(v as 'structure' | 'backtest' | 'history')}
+                onChange={(v) => setBottomTab(v as 'structure' | 'backtest' | 'weightlab' | 'history')}
                 size="sm"
                 tabs={[
                   { id: 'structure', label: 'Market Structure', icon: <Icon.Layers size={12} /> },
                   { id: 'backtest', label: 'Backtest', icon: <Icon.Activity size={12} /> },
+                  { id: 'weightlab', label: 'Weight Lab', icon: <Icon.Box size={12} />, badge: weightLab.isCustom ? <span className="w-1.5 h-1.5 rounded-full bg-accent" /> : undefined },
                   { id: 'history', label: 'History', icon: <Icon.Clock size={12} /> },
                 ]}
               />
@@ -152,7 +183,9 @@ export default function HomePage() {
                   srLevels={srLevels}
                 />
               ) : bottomTab === 'backtest' ? (
-                <BacktestPanel candles={candles} symbol={symbol} interval={interval} />
+                <BacktestPanel candles={candles} symbol={symbol} interval={interval} weights={weightLab.weights} />
+              ) : bottomTab === 'weightlab' ? (
+                <WeightLabPanel candles={candles} />
               ) : (
                 <HistoryPanel symbol={symbol} interval={interval} />
               )}
@@ -163,7 +196,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <aside className="hidden lg:block space-y-3 md:space-y-4">
+          <aside className="hidden md:block space-y-3 md:space-y-4">
             <SignalCard signal={signal} />
             <RiskCard signal={signal} />
             <IndicatorPanel signal={signal} />

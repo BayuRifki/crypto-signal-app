@@ -1,8 +1,9 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { Icon } from './Icon';
-import { useBacktest } from '../lib/hooks/useBacktest';
+import { useBacktestWithStatus } from '../lib/hooks/useBacktest';
 import type { BacktestOptions } from '../lib/backtest';
+import type { SignalWeights } from '../lib/signal';
 
 const fmtPct = (n: number, sign = false) =>
   sign && n > 0 ? `+${n.toFixed(2)}%` : `${n.toFixed(2)}%`;
@@ -11,19 +12,20 @@ type Props = {
   candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[];
   symbol: string;
   interval: string;
+  weights?: Partial<SignalWeights>;
 };
 
-export default function BacktestPanel({ candles, symbol, interval }: Props) {
+export default function BacktestPanel({ candles, symbol, interval, weights }: Props) {
   const [minConfidence, setMinConfidence] = useState(0);
   const [maxLookahead, setMaxLookahead] = useState(50);
   const [cooldown, setCooldown] = useState(0);
   const [skipRanging, setSkipRanging] = useState(false);
 
   const options: BacktestOptions = useMemo(
-    () => ({ minConfidence, maxLookahead, cooldown, skipRanging }),
-    [minConfidence, maxLookahead, cooldown, skipRanging]
+    () => ({ minConfidence, maxLookahead, cooldown, skipRanging, weights }),
+    [minConfidence, maxLookahead, cooldown, skipRanging, weights]
   );
-  const result = useBacktest(candles, options);
+  const { result, isRunning, workerAvailable } = useBacktestWithStatus(candles, options);
 
   if (candles.length < 250) {
     return (
@@ -34,6 +36,23 @@ export default function BacktestPanel({ candles, symbol, interval }: Props) {
         </div>
         <div className="text-xs text-fg-muted">
           Need at least 250 candles to backtest. Currently have {candles.length}.
+        </div>
+      </div>
+    );
+  }
+
+  if (isRunning && !result) {
+    return (
+      <div className="card p-5 space-y-3">
+        <div className="flex items-center gap-2 text-2xs text-fg-dim uppercase tracking-wider font-bold">
+          <Icon.Activity size={12} />
+          <span>Backtest · {symbol} · {interval}</span>
+        </div>
+        <div className="flex items-center gap-3 py-6 justify-center">
+          <div className="w-5 h-5 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
+          <div className="text-xs text-fg-muted">
+            Running {workerAvailable ? 'in Web Worker' : 'on main thread'}…
+          </div>
         </div>
       </div>
     );

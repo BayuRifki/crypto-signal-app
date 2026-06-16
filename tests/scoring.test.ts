@@ -42,6 +42,7 @@ if (sigUp) {
   assert(sigUp.score >= -100 && sigUp.score <= 100, `Score in range [-100, 100] (got ${sigUp.score})`);
   assert(sigUp.confidence >= 10 && sigUp.confidence <= 100, `Confidence in [10, 100] (got ${sigUp.confidence})`);
   assert(['BUY', 'SELL', 'HOLD'].includes(sigUp.action), `Action is valid (got ${sigUp.action})`);
+  assert(sigUp.action !== 'HOLD', `Uptrend should not be HOLD after adaptive scoring (got ${sigUp.action})`);
   assert(sigUp.rsiValue !== null, 'RSI value present');
   assert(sigUp.adx !== null, 'ADX value present');
   assert(typeof sigUp.regime === 'string', 'Regime is string');
@@ -64,24 +65,63 @@ if (sigDown) {
   assert(sigDown.rsiValue !== null, 'Downtrend RSI present');
 }
 
-// Ranging market should produce HOLD or low confidence
+// Ranging market should produce HOLD or reduced confidence for weak setups
 const sigRange = computeSignal(ranging);
 assert(sigRange !== null, 'Ranging signal is not null');
 if (sigRange) {
-  // In ranging market, ADX gate should force HOLD if ADX < 20
-  if (sigRange.regime === 'ranging' && sigRange.adx !== null && sigRange.adx < 20) {
-    assert(sigRange.action === 'HOLD', `Ranging market with low ADX → HOLD (got ${sigRange.action}, ADX=${sigRange.adx?.toFixed(1)})`);
-    assert(sigRange.confidence <= 35, `Ranging HOLD confidence ≤ 35 (got ${sigRange.confidence})`);
+  if (sigRange.regime === 'ranging' && sigRange.adx !== null && sigRange.adx < 18 && Math.abs(sigRange.score) < 52) {
+    assert(sigRange.action === 'HOLD', `Weak ranging market signal → HOLD (got ${sigRange.action}, ADX=${sigRange.adx?.toFixed(1)}, score=${sigRange.score})`);
+    assert(sigRange.confidence <= 45, `Ranging HOLD confidence ≤ 45 (got ${sigRange.confidence})`);
   }
 }
 
-// Components sum matches score
+// Ranging entry quality: SL/TP must be on correct side of price + min distance
+if (sigRange && sigRange.action !== 'HOLD') {
+  if (sigRange.action === 'BUY') {
+    assert(sigRange.risk.stopLoss < sigRange.price, `Ranging BUY: SL below price (SL=${sigRange.risk.stopLoss.toFixed(2)}, price=${sigRange.price.toFixed(2)})`);
+    assert(sigRange.risk.takeProfit > sigRange.price, `Ranging BUY: TP above price (TP=${sigRange.risk.takeProfit.toFixed(2)}, price=${sigRange.price.toFixed(2)})`);
+  } else if (sigRange.action === 'SELL') {
+    assert(sigRange.risk.stopLoss > sigRange.price, `Ranging SELL: SL above price (SL=${sigRange.risk.stopLoss.toFixed(2)}, price=${sigRange.price.toFixed(2)})`);
+    assert(sigRange.risk.takeProfit < sigRange.price, `Ranging SELL: TP below price (TP=${sigRange.risk.takeProfit.toFixed(2)}, price=${sigRange.price.toFixed(2)})`);
+  }
+  if (sigRange.regime === 'ranging') {
+    const slDistPct = Math.abs(sigRange.price - sigRange.risk.stopLoss) / sigRange.price * 100;
+    const tpDistPct = Math.abs(sigRange.risk.takeProfit - sigRange.price) / sigRange.price * 100;
+    assert(slDistPct >= 0.7, `Ranging SL ≥ 0.7% from price (got ${slDistPct.toFixed(2)}%)`);
+    assert(tpDistPct >= 0.9, `Ranging TP ≥ 0.9% from price (got ${tpDistPct.toFixed(2)}%)`);
+  }
+}
+
+// Adaptive score should preserve directional consistency with components/trend bias
 if (sigUp) {
   const compSum = sigUp.components.bb + sigUp.components.rsi + sigUp.components.macd +
     sigUp.components.sr + sigUp.components.fvg + sigUp.components.ema +
     sigUp.components.volume + sigUp.components.orderBlock + sigUp.components.marketStructure +
-    sigUp.components.liquiditySweep + sigUp.components.trend;
-  assert(Math.abs(compSum - sigUp.score) <= 1, `Component sum ≈ score (${compSum} vs ${sigUp.score})`);
+    sigUp.components.liquiditySweep + sigUp.components.trend + sigUp.components.divergence;
+  assert(Math.sign(sigUp.score || 0) === Math.sign(compSum || 0) || Math.abs(sigUp.score) <= 5,
+    `Adaptive score keeps directional consistency (${compSum} vs ${sigUp.score})`);
+}
+
+// Rebalanced weight bounds: each component should respect its max range
+if (sigUp) {
+  const c = sigUp.components;
+  assert(Math.abs(c.bb) <= 12, `BB within ±12 (got ${c.bb})`);
+  assert(Math.abs(c.rsi) <= 15, `RSI within ±15 (got ${c.rsi})`);
+  assert(Math.abs(c.macd) <= 15, `MACD within ±15 (got ${c.macd})`);
+  assert(Math.abs(c.sr) <= 18, `S/R within ±18 incl POC (got ${c.sr})`);
+  assert(Math.abs(c.fvg) <= 12, `FVG within ±12 (got ${c.fvg})`);
+  assert(Math.abs(c.ema) <= 13, `EMA within ±13 (got ${c.ema})`);
+  assert(Math.abs(c.volume) <= 12, `Volume within adaptive bound ±12 (got ${c.volume})`);
+  assert(Math.abs(c.orderBlock) <= 12, `OB within ±12 (got ${c.orderBlock})`);
+  assert(Math.abs(c.marketStructure) <= 12, `MS within ±12 (got ${c.marketStructure})`);
+  assert(Math.abs(c.liquiditySweep) <= 8, `Sweep within ±8 (got ${c.liquiditySweep})`);
+  assert(Math.abs(c.trend) <= 19, `Trend within adaptive bound ±19 (got ${c.trend})`);
+  assert(Math.abs(c.divergence) <= 6, `Divergence within ±6 (got ${c.divergence})`);
+}
+
+// Divergence field exists (may be 0 if no divergence detected)
+if (sigUp) {
+  assert(typeof sigUp.components.divergence === 'number', `Divergence is number (got ${typeof sigUp.components.divergence})`);
 }
 
 // Sigmoid confidence properties
@@ -92,6 +132,30 @@ if (sigUp) {
   // Score 100 should give ~95% confidence (near ceiling)
   if (absScore >= 70) {
     assert(sigUp.confidence >= 70, `High score (${absScore}) → high confidence (${sigUp.confidence}%)`);
+  }
+}
+
+// Volatile-regime gate: synthetic volatile data must not produce actionable signal without bias match
+// or strong ADX trend confirmation. Build 220 candles of high-noise chop with no trend.
+const volatileChop: Candle[] = [];
+for (let i = 0; i < 220; i++) {
+  const base = 100 + Math.sin(i / 2) * 15;
+  const noise = Math.sin(i * 1.7) * 4;
+  const price = base + noise;
+  volatileChop.push(c(i, price - 1, price + 2, price - 2, price + (Math.random() - 0.5) * 1, 1500));
+}
+const sigVol = computeSignal(volatileChop);
+assert(sigVol !== null, 'Volatile chop signal is not null');
+if (sigVol) {
+  const atrPct = (sigVol.risk.atr / sigVol.price) * 100;
+  if (atrPct > 1.8 && sigVol.action !== 'HOLD') {
+    const biasMatches = (sigVol.action === 'BUY' && sigVol.regimeBias === 'bullish') || (sigVol.action === 'SELL' && sigVol.regimeBias === 'bearish');
+    const strongTrend = (sigVol.adx ?? 0) >= 50;
+    assert(biasMatches && strongTrend, `Volatile entry requires bias match AND ADX≥50 (action=${sigVol.action}, bias=${sigVol.regimeBias}, adx=${sigVol.adx?.toFixed(1)})`);
+  }
+  if (atrPct > 1.5 && sigVol.action !== 'HOLD') {
+    const slDistPct = Math.abs(sigVol.price - sigVol.risk.stopLoss) / sigVol.price * 100;
+    assert(slDistPct >= atrPct * 0.3, `Vol-adaptive SL floor: SL ≥ 0.3×ATR% (SL=${slDistPct.toFixed(2)}%, ATR=${atrPct.toFixed(2)}%)`);
   }
 }
 

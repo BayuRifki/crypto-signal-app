@@ -9,7 +9,7 @@ const STYLES: Record<Variant, string> = {
   info: 'bg-info/15 text-info border-info/30',
   warn: 'bg-warn/15 text-warn border-warn/30',
   accent: 'bg-accent/15 text-accent border-accent/30',
-  neutral: 'bg-bg-panel text-fg-muted border-line',
+  neutral: 'bg-fg-muted/15 text-fg-muted border-line',
 };
 
 type Props = {

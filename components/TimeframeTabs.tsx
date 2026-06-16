@@ -1,5 +1,5 @@
 'use client';
-import type { Interval } from '../lib/binance';
+import type { Interval } from '../lib/exchanges/types';
 
 const TFS: { value: Interval; label: string; sub: string }[] = [
   { value: '1m', label: '1m', sub: 'Scalp' },

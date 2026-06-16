@@ -1,13 +1,48 @@
 'use client';
 import useSWR from 'swr';
-import { getTicker, type Ticker24h } from '../binance';
+import { getTickerWithFallback, type FallbackResult } from '../exchanges/fallback';
+import type { ExchangeId } from '../exchanges/fallback';
+import type { Ticker24h } from '../exchanges/types';
 
-const fetcher = async (key: string): Promise<Ticker24h> => getTicker(key);
+type TickerPayload = { data: Ticker24h; exchangeId: string };
 
-export const useTicker = (symbol: string) => {
-  const { data, error, isLoading, mutate } = useSWR<Ticker24h>(`ticker:${symbol}`, fetcher, {
+const fetchDirect = async (exchange: ExchangeId, symbol: string): Promise<FallbackResult<Ticker24h>> =>
+  getTickerWithFallback(symbol, exchange);
+
+const fetchProxy = async (exchange: ExchangeId, symbol: string): Promise<FallbackResult<Ticker24h>> => {
+  const res = await fetch(`/api/exchanges/${exchange}/ticker?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`proxy ${res.status}: ${body.error ?? res.statusText}`);
+  }
+  const json = (await res.json()) as TickerPayload;
+  return { data: json.data, exchangeId: (json.exchangeId as ExchangeId) ?? exchange, attempts: [{ id: (json.exchangeId as ExchangeId) ?? exchange, ok: true }] };
+};
+
+const fetcher = async (key: string): Promise<FallbackResult<Ticker24h>> => {
+  const [, exchange, symbol] = key.split('|') as [string, ExchangeId, string];
+  try {
+    return await fetchDirect(exchange, symbol);
+  } catch (e) {
+    try {
+      return await fetchProxy(exchange, symbol);
+    } catch {
+      throw e;
+    }
+  }
+};
+
+export const useTicker = (exchange: ExchangeId, symbol: string) => {
+  const { data, error, isLoading, mutate } = useSWR<FallbackResult<Ticker24h>>(`ticker|${exchange}|${symbol}`, fetcher, {
     refreshInterval: 15000,
     revalidateOnFocus: false,
+    shouldRetryOnError: false,
   });
-  return { ticker: data ?? null, error, isLoading, refresh: mutate };
+  return {
+    ticker: data?.data ?? null,
+    sourceExchange: data?.exchangeId ?? null,
+    error,
+    isLoading,
+    refresh: mutate,
+  };
 };

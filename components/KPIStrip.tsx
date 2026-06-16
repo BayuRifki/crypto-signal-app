@@ -2,19 +2,14 @@
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import type { Signal } from '../lib/signal';
-import type { Ticker24h } from '../lib/binance';
+import type { Ticker24h } from '../lib/exchanges/types';
+import { fmtPrice } from '../lib/utils';
 
 type Props = {
   symbol: string;
   interval: string;
   signal: Signal | null;
   ticker: Ticker24h | null;
-};
-
-const fmtPrice = (n: number) => {
-  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toFixed(3);
-  return n.toFixed(6);
 };
 
 export default function KPIStrip({ signal, ticker }: Props) {
