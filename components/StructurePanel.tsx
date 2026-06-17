@@ -37,7 +37,7 @@ export default function StructurePanel({ price, fvgs, orderBlocks, msSignals, sw
         </div>
         <div className="text-2xs text-fg-dim tabular font-mono">{fmtPrice(price)}</div>
       </div>
-      <Tabs tabs={tabs} value={tab} onChange={setTab} size="sm" />
+      <Tabs tabs={tabs} value={tab} onChange={setTab} size="sm" ariaLabel="Smart money map views" />
       <div className="mt-3">
         {tab === 'im' && <ImbalanceView price={price} fvgs={fvgs} obs={orderBlocks} />}
         {tab === 'st' && <StructureView signals={msSignals} sweeps={sweeps} price={price} />}

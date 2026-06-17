@@ -191,6 +191,7 @@ async function main() {
           pair,
           interval: intervalConfig.label,
           candlesUsed: candles.length,
+          duration: bt.duration,
           ...bt.metrics,
         };
         allResults.push(result);

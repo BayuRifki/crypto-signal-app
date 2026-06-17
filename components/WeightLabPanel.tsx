@@ -1,6 +1,6 @@
 'use client';
-import { useMemo, useState } from 'react';
-import { useWeightLab } from '../lib/hooks/useWeightLab';
+import React, { useMemo, useState } from 'react';
+import type { UseWeightLabResult } from '../lib/hooks/useWeightLab';
 import { Icon } from './Icon';
 import type { WeightKey } from '../lib/weightOptimizer';
 import type { Candle } from '../lib/utils';
@@ -18,10 +18,10 @@ const WEIGHT_ORDER: WeightKey[] = [
 
 type Props = {
   candles: Candle[];
+  lab: UseWeightLabResult;
 };
 
-export default function WeightLabPanel({ candles }: Props) {
-  const lab = useWeightLab();
+export default function WeightLabPanel({ candles, lab }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -56,7 +56,7 @@ export default function WeightLabPanel({ candles }: Props) {
         <button
           onClick={() => lab.optimize(candles)}
           disabled={!canOptimize}
-          className={`text-xs px-3 py-1.5 rounded font-bold border transition ${
+          className={`h-9 px-3 text-xs rounded font-bold border transition cursor-pointer ${
             canOptimize
               ? 'bg-info/15 border-info/40 text-info hover:bg-info/25'
               : 'bg-bg-elevated border-line text-fg-dim cursor-not-allowed'
@@ -90,7 +90,8 @@ export default function WeightLabPanel({ candles }: Props) {
         <div className="flex-1" />
         <button
           onClick={() => setShowAdvanced((v) => !v)}
-          className="text-2xs px-2 py-1 rounded text-fg-muted hover:text-fg"
+          aria-expanded={showAdvanced}
+          className="h-7 px-2 text-2xs rounded text-fg-muted hover:text-fg hover:bg-bg-panel transition cursor-pointer"
         >
           {showAdvanced ? 'Hide' : 'Show'} Advanced
         </button>
@@ -167,19 +168,19 @@ export default function WeightLabPanel({ candles }: Props) {
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-line">
         <button
           onClick={lab.save}
-          className="text-2xs px-2.5 py-1 rounded bg-buy/15 border border-buy/30 text-buy hover:bg-buy/25 font-bold"
+          className="h-8 px-3 text-2xs rounded bg-buy/15 border border-buy/30 text-buy hover:bg-buy/25 font-bold transition cursor-pointer"
         >
           Save
         </button>
         <button
           onClick={lab.resetToDefault}
-          className="text-2xs px-2.5 py-1 rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong"
+          className="h-8 px-3 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong hover:text-fg transition cursor-pointer"
         >
           Reset to Default
         </button>
         <button
           onClick={lab.clear}
-          className="text-2xs px-2.5 py-1 rounded bg-bg-elevated border border-line text-fg-muted hover:border-sell/40 hover:text-sell"
+          className="h-8 px-3 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-sell/40 hover:text-sell transition cursor-pointer"
         >
           Clear Saved
         </button>

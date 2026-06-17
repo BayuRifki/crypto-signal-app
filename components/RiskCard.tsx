@@ -17,8 +17,8 @@ export default function RiskCard({ signal }: Props) {
 
   const isLong = signal.action === 'BUY';
   const isShort = signal.action === 'SELL';
-  const distToSL = ((signal.risk.stopLoss - signal.price) / signal.price) * 100;
-  const distToTP = ((signal.risk.takeProfit - signal.price) / signal.price) * 100;
+  const distToSL = isShort ? ((signal.risk.stopLoss - signal.price) / signal.price) * 100 : ((signal.price - signal.risk.stopLoss) / signal.price) * 100;
+  const distToTP = isShort ? ((signal.price - signal.risk.takeProfit) / signal.price) * 100 : ((signal.risk.takeProfit - signal.price) / signal.price) * 100;
   const slSourceLabel = signal.risk.slSource === 'sr' ? 'S/R' : signal.risk.slSource === 'atr' ? 'ATR' : '—';
   const tpSourceLabel = signal.risk.tpSource === 'sr' ? 'S/R' : signal.risk.tpSource === 'atr' ? 'ATR' : '—';
   const rrWarn = signal.risk.rr < 1.2;

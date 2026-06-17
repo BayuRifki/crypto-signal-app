@@ -104,7 +104,9 @@ export const useWeightLab = (): UseWeightLabResult => {
   const isCustom = (Object.keys(weights) as WeightKey[]).some(
     (k) => Math.abs(weights[k] - DEFAULT_WEIGHTS[k]) > 1e-6
   );
-  const isOptimized = lastResult !== null && savedAt !== null;
+  const isOptimized = lastResult !== null && savedAt !== null && (Object.keys(lastResult.best.weights) as WeightKey[]).every(
+    (k) => Math.abs(weights[k] - lastResult!.best.weights[k]) < 1e-6
+  );
 
   const setWeight = useCallback((key: WeightKey, value: number) => {
     setWeights((prev) => ({ ...prev, [key]: value }));

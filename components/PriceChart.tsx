@@ -33,6 +33,14 @@ type Props = {
   showMS: boolean;
 };
 
+type OverlaySeries = {
+  bbMid: ISeriesApi<'Line'> | null;
+  bbUp: ISeriesApi<'Line'> | null;
+  bbLo: ISeriesApi<'Line'> | null;
+  ema50: ISeriesApi<'Line'> | null;
+  ema200: ISeriesApi<'Line'> | null;
+};
+
 export default function PriceChart({
   candles,
   fvgs,
@@ -49,7 +57,7 @@ export default function PriceChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const lineSeriesRef = useRef<ISeriesApi<'Line'>[]>([]);
+  const overlayRef = useRef<OverlaySeries>({ bbMid: null, bbUp: null, bbLo: null, ema50: null, ema200: null });
   const priceLinesRef = useRef<IPriceLine[]>([]);
 
   useEffect(() => {
@@ -84,7 +92,7 @@ export default function PriceChart({
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
-      lineSeriesRef.current = [];
+      overlayRef.current = { bbMid: null, bbUp: null, bbLo: null, ema50: null, ema200: null };
       priceLinesRef.current = [];
     };
   }, []);
@@ -94,10 +102,15 @@ export default function PriceChart({
     [candles]
   );
 
+  const hasFittedRef = useRef(false);
+
   useEffect(() => {
     if (!candleSeriesRef.current || candleData.length === 0) return;
     candleSeriesRef.current.setData(candleData);
-    chartRef.current?.timeScale().fitContent();
+    if (!hasFittedRef.current) {
+      chartRef.current?.timeScale().fitContent();
+      hasFittedRef.current = true;
+    }
   }, [candleData]);
 
   const bbData = useMemo(() => (showBB ? bollinger(candles, 20, 2) : null), [candles, showBB]);
@@ -124,35 +137,48 @@ export default function PriceChart({
 
   useEffect(() => {
     const chart = chartRef.current;
-    const series = candleSeriesRef.current;
-    if (!chart || !series || candles.length === 0) return;
+    const ov = overlayRef.current;
+    if (!chart || !candleSeriesRef.current || candles.length === 0) return;
 
-    for (const ln of lineSeriesRef.current) {
-      try { chart.removeSeries(ln); } catch {}
+    const lineOpts = (color: string) => ({ color, lineWidth: 1 as const, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
+    if (showBB && bbData) {
+      if (!ov.bbMid) {
+        ov.bbMid = chart.addLineSeries(lineOpts('#475569'));
+        ov.bbUp = chart.addLineSeries(lineOpts('#0ea5e9'));
+        ov.bbLo = chart.addLineSeries(lineOpts('#0ea5e9'));
+      }
+      ov.bbMid.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.middle ?? NaN })));
+      if (ov.bbUp) ov.bbUp.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.upper ?? NaN })));
+      if (ov.bbLo) ov.bbLo.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.lower ?? NaN })));
+    } else if (ov.bbMid) {
+      try { chart.removeSeries(ov.bbMid); } catch {}
+      if (ov.bbUp) try { chart.removeSeries(ov.bbUp); } catch {}
+      if (ov.bbLo) try { chart.removeSeries(ov.bbLo); } catch {}
+      ov.bbMid = null; ov.bbUp = null; ov.bbLo = null;
     }
-    lineSeriesRef.current = [];
+
+    if (showEMA && emaData) {
+      if (!ov.ema50) {
+        ov.ema50 = chart.addLineSeries(lineOpts('#f59e0b'));
+        ov.ema200 = chart.addLineSeries(lineOpts('#8b5cf6'));
+      }
+      ov.ema50.setData(emaData.e50.map((v, i) => ({ time: candles[i].time as Time, value: v ?? NaN })));
+      if (ov.ema200) ov.ema200.setData(emaData.e200.map((v, i) => ({ time: candles[i].time as Time, value: v ?? NaN })));
+    } else if (ov.ema50) {
+      try { chart.removeSeries(ov.ema50); } catch {}
+      if (ov.ema200) try { chart.removeSeries(ov.ema200); } catch {}
+      ov.ema50 = null; ov.ema200 = null;
+    }
+  }, [candles, bbData, emaData, showBB, showEMA]);
+
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    if (!series) return;
     for (const pl of priceLinesRef.current) {
       try { series.removePriceLine(pl); } catch {}
     }
     priceLinesRef.current = [];
-
-    if (bbData) {
-      const mid = chart.addLineSeries({ color: '#475569', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      const up = chart.addLineSeries({ color: '#0ea5e9', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      const lo = chart.addLineSeries({ color: '#0ea5e9', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      mid.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.middle ?? NaN })));
-      up.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.upper ?? NaN })));
-      lo.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.lower ?? NaN })));
-      lineSeriesRef.current.push(mid, up, lo);
-    }
-
-    if (emaData) {
-      const s50 = chart.addLineSeries({ color: '#f59e0b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      const s200 = chart.addLineSeries({ color: '#8b5cf6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      s50.setData(emaData.e50.map((v, i) => ({ time: candles[i].time as Time, value: v ?? NaN })));
-      s200.setData(emaData.e200.map((v, i) => ({ time: candles[i].time as Time, value: v ?? NaN })));
-      lineSeriesRef.current.push(s50, s200);
-    }
 
     const addLine = (price: number, color: string, style: LineStyle, title: string) =>
       series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
@@ -184,7 +210,7 @@ export default function PriceChart({
         priceLinesRef.current.push(addLine(lvl.price, color, LineStyle.LargeDashed, lvl.type[0].toUpperCase()));
       }
     }
-  }, [candles, bbData, emaData, fvgs, orderBlocks, srLevels, showFVG, showOB, showSR]);
+  }, [fvgs, orderBlocks, srLevels, showFVG, showOB, showSR]);
 
   const handleFit = () => chartRef.current?.timeScale().fitContent();
   const handleZoom = (delta: number) => {
@@ -202,14 +228,14 @@ export default function PriceChart({
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
       <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
-        <button onClick={() => handleZoom(1)} className="w-7 h-7 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg flex items-center justify-center backdrop-blur transition" aria-label="Zoom in">
-          <span className="text-base font-bold leading-none">+</span>
+        <button onClick={() => handleZoom(1)} className="w-9 h-9 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg hover:bg-bg-panel flex items-center justify-center backdrop-blur transition cursor-pointer" aria-label="Zoom in" title="Zoom in">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
         </button>
-        <button onClick={() => handleZoom(-1)} className="w-7 h-7 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg flex items-center justify-center backdrop-blur transition" aria-label="Zoom out">
-          <span className="text-base font-bold leading-none">−</span>
+        <button onClick={() => handleZoom(-1)} className="w-9 h-9 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg hover:bg-bg-panel flex items-center justify-center backdrop-blur transition cursor-pointer" aria-label="Zoom out" title="Zoom out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /></svg>
         </button>
-        <button onClick={handleFit} className="w-7 h-7 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg flex items-center justify-center backdrop-blur transition" aria-label="Fit to content" title="Fit to content">
-          <Icon.Target size={13} />
+        <button onClick={handleFit} className="w-9 h-9 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg hover:bg-bg-panel flex items-center justify-center backdrop-blur transition cursor-pointer" aria-label="Fit to content" title="Fit to content">
+          <Icon.Target size={14} />
         </button>
       </div>
     </div>

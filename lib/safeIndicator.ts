@@ -1,12 +1,15 @@
 /**
- * Wraps an indicator computation so that if it throws, the caller gets a
- * fallback value and the indicator name is tracked as degraded. A null/undefined
- * return is NOT treated as degradation — that's the indicator's normal "no
- * signal" behavior (e.g. nearestPOC returning null when no POC is nearby).
+ * Wraps an indicator computation so that if it throws, or returns
+ * NaN/Infinity in a numeric context, the caller gets a fallback value
+ * and the indicator name is tracked as degraded.
  *
- * Used inside computeSignal to ensure one bad indicator never kills the whole
- * signal — the rest of the pipeline completes, the UI surfaces degraded=true,
- * and confidence is penalized.
+ * A null/undefined return is NOT treated as degradation — that's the
+ * indicator's normal "no signal" behavior (e.g. nearestPOC returning null
+ * when no POC is nearby).
+ *
+ * Used inside computeSignal to ensure one bad indicator never kills the
+ * whole signal — the rest of the pipeline completes, the UI surfaces
+ * degraded=true, and confidence is penalized.
  */
 export const safeIndicator = <T,>(
   name: string,
@@ -15,7 +18,17 @@ export const safeIndicator = <T,>(
   degraded: string[]
 ): T => {
   try {
-    return fn();
+    const result = fn();
+    if (typeof result === 'number' && (!Number.isFinite(result) || Number.isNaN(result))) {
+      if (!degraded.includes(name)) {
+        degraded.push(name);
+        if (typeof console !== 'undefined') {
+          console.warn(`[signal] indicator ${name} returned non-finite number: ${result}`);
+        }
+      }
+      return fallback;
+    }
+    return result;
   } catch (e) {
     if (!degraded.includes(name)) {
       degraded.push(name);

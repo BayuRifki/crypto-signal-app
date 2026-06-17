@@ -46,9 +46,21 @@ const ensureWorker = (): Worker | null => {
   }
 };
 
-const isWorkerSupported = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return typeof Worker !== 'undefined';
+let _workerAvailable: boolean | null = null;
+
+const checkWorkerAvailable = (): boolean => {
+  if (_workerAvailable !== null) return _workerAvailable;
+  if (typeof window === 'undefined') { _workerAvailable = false; return false; }
+  try {
+    const testUrl = URL.createObjectURL(new Blob(['self.postMessage("ok")'], { type: 'application/javascript' }));
+    const w = new Worker(testUrl);
+    w.terminate();
+    URL.revokeObjectURL(testUrl);
+    _workerAvailable = true;
+  } catch {
+    _workerAvailable = false;
+  }
+  return _workerAvailable;
 };
 
 const runOnWorker = <T,>(type: WorkerTask['type'], payload: unknown): Promise<T> => {
@@ -72,11 +84,11 @@ export const useWorkerBacktest = (candles: Candle[], options: BacktestOptions = 
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [workerAvailable] = useState<boolean>(isWorkerSupported());
-  const cancelledRef = useRef(false);
+  const [workerAvailable] = useState<boolean>(checkWorkerAvailable());
+  const versionRef = useRef(0);
 
   useEffect(() => {
-    cancelledRef.current = false;
+    const version = ++versionRef.current;
     setError(null);
 
     if (candles.length < 250) {
@@ -85,34 +97,32 @@ export const useWorkerBacktest = (candles: Candle[], options: BacktestOptions = 
       return;
     }
 
-    // Try worker first; fall back to main thread on failure
     setIsRunning(true);
     runOnWorker<BacktestResult>('backtest', { candles, options })
       .then((r) => {
-        if (cancelledRef.current) return;
+        if (version !== versionRef.current) return;
         setResult(r);
         setIsRunning(false);
       })
       .catch((e) => {
-        if (cancelledRef.current) return;
+        if (version !== versionRef.current) return;
         if (typeof console !== 'undefined') console.warn('[useWorkerBacktest] worker failed, running on main thread:', e);
-        // Fallback: run on main thread
         try {
           const r = runBacktest(candles, options);
-          if (!cancelledRef.current) {
+          if (version === versionRef.current) {
             setResult(r);
             setError(null);
           }
         } catch (fallbackErr) {
-          if (!cancelledRef.current) {
+          if (version === versionRef.current) {
             setError(fallbackErr instanceof Error ? fallbackErr.message : 'backtest failed');
           }
         } finally {
-          if (!cancelledRef.current) setIsRunning(false);
+          if (version === versionRef.current) setIsRunning(false);
         }
       });
 
-    return () => { cancelledRef.current = true; };
+    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, JSON.stringify(options)]);
 
@@ -153,7 +163,7 @@ export const useWorkerOptimize = (): WorkerOptimizeState & { run: (candles: Cand
   return { result, isRunning, error, progress, run };
 };
 
-export const isWorkerAvailable = isWorkerSupported;
+export const isWorkerAvailable = checkWorkerAvailable;
 export const _resetWorker = (): void => {
   if (_sharedWorker) {
     _sharedWorker.terminate();

@@ -12,7 +12,7 @@
   --color-info: #0ea5e9;
   --color-accent: #a78bfa;
   --color-hold: #94a3b8;
-  --color-fg-muted: #64748b;
+  --color-fg-muted: #94a3b8;
 }
 
 html, body {
@@ -21,6 +21,7 @@ html, body {
   min-height: 100%;
   font-feature-settings: 'tnum', 'cv11';
   -webkit-font-smoothing: antialiased;
+  scrollbar-color: #2d3a5a #070b14;
 }
 
 body {
@@ -33,6 +34,14 @@ body {
 * { -webkit-tap-highlight-color: transparent; }
 
 button, [role="button"] { user-select: none; }
+
+*:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection { background: rgba(14,165,233,0.35); color: #f1f5f9; }
 
 .tabular { font-variant-numeric: tabular-nums; }
 
@@ -71,14 +80,27 @@ button, [role="button"] { user-select: none; }
   color: #94a3b8;
 }
 
-.focus-ring:focus-visible {
-  outline: 2px solid #0ea5e9;
-  outline-offset: 2px;
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 12px;
+  background: #0ea5e9;
+  color: #070b14;
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: top 150ms ease;
 }
+.skip-link:focus { top: 8px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

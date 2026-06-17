@@ -59,6 +59,19 @@ const config: Config = {
         lg: '12px',
         xl: '16px',
       },
+      zIndex: {
+        base: '0',
+        sticky: '20',
+        header: '30',
+        dropdown: '40',
+        drawer: '50',
+        modal: '60',
+        toast: '70',
+      },
+      spacing: {
+        'safe-top': 'var(--safe-top)',
+        'safe-bottom': 'var(--safe-bottom)',
+      },
       keyframes: {
         'fade-in': { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         'slide-up': { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } },

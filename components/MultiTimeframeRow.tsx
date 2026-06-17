@@ -6,9 +6,8 @@ import { KEY_TIMEFRAMES } from './TimeframeTabs';
 import type { ExchangeId, Interval } from '../lib/exchanges/types';
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
-import { logSignal } from '../lib/signalHistory';
 
-type Props = { symbol: string; activeTf: Interval; exchange: ExchangeId };
+type Props = { symbol: string; activeTf: Interval; exchange: ExchangeId; onChangeTf?: (tf: Interval) => void };
 
 const ACTION_STYLES: Record<SignalAction, { ring: string; bg: string; text: string; dot: string }> = {
   BUY: { ring: 'border-buy/40', bg: 'bg-buy/10', text: 'text-buy', dot: 'bg-buy' },
@@ -16,7 +15,21 @@ const ACTION_STYLES: Record<SignalAction, { ring: string; bg: string; text: stri
   HOLD: { ring: 'border-line-strong', bg: 'bg-bg-elevated', text: 'text-fg-muted', dot: 'bg-fg-dim' },
 };
 
-const Row = ({ symbol, tf, activeTf, exchange, onResult }: { symbol: string; tf: Interval; activeTf: Interval; exchange: ExchangeId; onResult: (s: SignalAction | null, score: number | null) => void }) => {
+const Row = ({
+  symbol,
+  tf,
+  activeTf,
+  exchange,
+  onResult,
+  onSelect,
+}: {
+  symbol: string;
+  tf: Interval;
+  activeTf: Interval;
+  exchange: ExchangeId;
+  onResult: (s: SignalAction | null, score: number | null) => void;
+  onSelect?: (tf: Interval) => void;
+}) => {
   const { candles } = useKlines(exchange, symbol, tf, 300);
   const [res, setRes] = useState<{ action: SignalAction | null; score: number | null }>({ action: null, score: null });
   useEffect(() => {
@@ -25,17 +38,23 @@ const Row = ({ symbol, tf, activeTf, exchange, onResult }: { symbol: string; tf:
     const next = sig ? { action: sig.action, score: sig.score } : { action: null, score: null };
     setRes(next);
     onResult(next.action, next.score);
-    if (sig) logSignal(symbol, tf, sig);
-  }, [candles, onResult]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles]);
   const isActive = tf === activeTf;
   const loading = res.action === null;
   const s = res.action ? ACTION_STYLES[res.action] : null;
 
+  const handle = () => onSelect?.(tf);
+
   return (
-    <Tooltip label={res.action ? `${res.action} signal · score ${res.score! > 0 ? '+' : ''}${res.score}` : `Loading ${tf}…`}>
-      <div
-        className={`relative flex flex-col gap-0.5 p-2 md:p-2.5 rounded-md border transition cursor-help ${
-          isActive ? 'border-info/50 bg-info/5' : s ? `${s.ring} ${s.bg}` : 'border-line bg-bg-elevated'
+    <Tooltip label={isActive ? `Active timeframe ${tf}` : res.action ? `${res.action} · score ${res.score! > 0 ? '+' : ''}${res.score} — click to switch to ${tf}` : `Click to switch to ${tf}`}>
+      <button
+        type="button"
+        onClick={handle}
+        aria-label={`Switch to ${tf} timeframe`}
+        aria-pressed={isActive}
+        className={`relative flex flex-col gap-0.5 p-2 md:p-2.5 rounded-md border text-left transition cursor-pointer ${
+          isActive ? 'border-info/50 bg-info/5' : s ? `${s.ring} ${s.bg} hover:border-line-strong` : 'border-line bg-bg-elevated hover:border-line-strong'
         }`}
       >
         <div className="flex items-center gap-1.5 text-2xs text-fg-dim uppercase tracking-wider font-bold">
@@ -53,13 +72,17 @@ const Row = ({ symbol, tf, activeTf, exchange, onResult }: { symbol: string; tf:
         {res.score !== null && (
           <div className="text-2xs text-fg-dim tabular">{res.score > 0 ? '+' : ''}{res.score}</div>
         )}
-      </div>
+      </button>
     </Tooltip>
   );
 };
 
-export default function MultiTimeframeRow({ symbol, activeTf, exchange }: Props) {
-  const [rows, setRows] = useState<Record<Interval, { action: SignalAction | null; score: number | null }>>({} as any);
+export default function MultiTimeframeRow({ symbol, activeTf, exchange, onChangeTf }: Props) {
+  const [rows, setRows] = useState<Record<Interval, { action: SignalAction | null; score: number | null }>>({} as Record<Interval, { action: SignalAction | null; score: number | null }>);
+
+  useEffect(() => {
+    setRows({} as Record<Interval, { action: SignalAction | null; score: number | null }>);
+  }, [symbol, exchange]);
 
   const valid = Object.values(rows).filter((r) => r.action);
   const buy = valid.filter((r) => r.action === 'BUY').length;
@@ -73,7 +96,7 @@ export default function MultiTimeframeRow({ symbol, activeTf, exchange }: Props)
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-2xs text-fg-dim uppercase tracking-wider font-bold">
           <Icon.Layers size={12} />
-          <span>Multi-Timeframe</span>
+          <span>Multi-Timeframe · click to switch</span>
         </div>
         <div className="flex items-center gap-2 text-2xs">
           <span className="text-fg-dim">Consensus:</span>
@@ -90,6 +113,7 @@ export default function MultiTimeframeRow({ symbol, activeTf, exchange }: Props)
             activeTf={activeTf}
             exchange={exchange}
             onResult={(action, score) => setRows((r) => ({ ...r, [tf]: { action, score } }))}
+            onSelect={onChangeTf}
           />
         ))}
       </div>

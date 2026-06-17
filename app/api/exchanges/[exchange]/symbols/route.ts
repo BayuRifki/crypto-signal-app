@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeList, type ExchangeId } from '@/lib/exchanges/registry';
-import { fetchWithTimeout, fetchViaCorsProxy, DEFAULT_TIMEOUT_MS } from '@/lib/exchanges/fetch';
+import { fetchViaCorsProxy, DEFAULT_TIMEOUT_MS } from '@/lib/exchanges/fetch';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';

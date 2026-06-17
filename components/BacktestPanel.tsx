@@ -100,7 +100,7 @@ export default function BacktestPanel({ candles, symbol, interval, weights }: Pr
                 a.click();
                 URL.revokeObjectURL(url);
               }}
-              className="text-2xs px-2 py-1 rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong"
+              className="h-7 px-2 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong hover:text-fg transition cursor-pointer"
               title="Export trades to CSV"
             >
               CSV
@@ -149,10 +149,11 @@ export default function BacktestPanel({ candles, symbol, interval, weights }: Pr
         />
         <button
           onClick={() => setSkipRanging(!skipRanging)}
-          className={`p-2 rounded border text-left transition ${
+          aria-pressed={skipRanging}
+          className={`p-2 rounded border text-left transition cursor-pointer min-h-[44px] ${
             skipRanging
               ? 'bg-info/15 border-info/40 text-info'
-              : 'bg-bg-elevated border-line text-fg-muted hover:border-line-strong'
+              : 'bg-bg-elevated border-line text-fg-muted hover:border-line-strong hover:text-fg'
           }`}
         >
           <div className="text-2xs text-fg-dim">Regime</div>
@@ -277,16 +278,20 @@ const Field = ({
   onChange: (v: number) => void;
 }) => (
   <div className="p-2 rounded bg-bg-elevated border border-line">
-    <div className="text-2xs text-fg-dim mb-1">{label}</div>
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-2xs text-fg-dim">{label}</span>
+      <span className="text-2xs font-bold tabular text-fg">{value}</span>
+    </div>
     <div className="flex gap-1">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`flex-1 text-2xs px-1.5 py-1 rounded font-bold tabular transition ${
+          aria-pressed={o.value === current}
+          className={`flex-1 h-7 text-2xs px-1.5 rounded font-bold tabular transition cursor-pointer ${
             o.value === current
               ? 'bg-info/20 text-info border border-info/40'
-              : 'bg-bg-panel text-fg-muted border border-line hover:border-line-strong'
+              : 'bg-bg-panel text-fg-muted border border-line hover:border-line-strong hover:text-fg'
           }`}
         >
           {o.label}

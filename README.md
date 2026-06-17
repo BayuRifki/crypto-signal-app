@@ -2,11 +2,11 @@
 
 Real-time crypto trading signal analyzer. Single pair, multi-timeframe, **signal-only** (no execution, no API keys).
 
-**Stack:** Next.js 14 · TypeScript · Tailwind · lightweight-charts · Binance public API · PWA-ready.
+**Stack:** Next.js 14 · TypeScript · Tailwind · lightweight-charts · Multi-exchange (Binance / OKX / Bybit) · PWA-ready.
 
 ## What it does
 
-Fetches OHLCV data from Binance's public REST API (no key, no backend), runs **15 indicator modules** combined into **11 scoring components**, and produces a composite score in `[-100, +100]` → **BUY / SELL / HOLD** with sigmoid-based confidence, adaptive SL/TP, multi-timeframe consensus, a built-in backtester, and a local signal-history log.
+Fetches OHLCV data from multiple exchange public REST APIs (Binance, OKX, Bybit — no keys, no backend), runs **15 indicator modules** combined into **11 scoring components**, and produces a composite score in `[-100, +100]` → **BUY / SELL / HOLD** with sigmoid-based confidence, adaptive SL/TP, multi-timeframe consensus, a built-in backtester, and a local signal-history log.
 
 > ⚠️ **Not financial advice.** Rule-based signals are not guarantees. Always do your own research.
 
@@ -101,7 +101,7 @@ npm run build && npm run start
 app/                  # Next.js App Router (page, layout, globals)
 components/           # 21 UI components (chart, signal card, panels, drawers)
 lib/
-  ├── binance.ts      # Public REST client (klines, ticker, symbols)
+  ├── exchanges/  # Multi-exchange abstraction (registry, fetch, fallback)
   ├── signal.ts       # Scoring engine (11 components → score + confidence + risk)
   ├── backtest.ts     # Sliding-window backtester
   ├── signalHistory.ts# localStorage signal log (max 200)
@@ -115,8 +115,9 @@ public/               # manifest + icon
 
 ## Data
 
-- All requests to `https://api.binance.com/api/v3/*` (no key, no backend).
-- Cached 60s (symbols) / 30s (klines) via SWR + retry ×3.
+- All requests go to the selected exchange's public API (Binance / OKX / Bybit). No API keys required.
+- Cached 60s (symbols) / 30s (klines) / 15s (ticker) via SWR + retry ×3.
+- **Multi-exchange fallback:** Direct → exchange fallback → server proxy route → public CORS proxy.
 - CORS headers configured in `next.config.mjs` for any future proxying.
 
 ## Testing

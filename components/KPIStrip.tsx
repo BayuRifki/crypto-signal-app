@@ -6,8 +6,6 @@ import type { Ticker24h } from '../lib/exchanges/types';
 import { fmtPrice } from '../lib/utils';
 
 type Props = {
-  symbol: string;
-  interval: string;
   signal: Signal | null;
   ticker: Ticker24h | null;
 };
@@ -58,10 +56,10 @@ export default function KPIStrip({ signal, ticker }: Props) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-line">
+      <div className="grid grid-cols-2 md:grid-cols-4 md:divide-x divide-line">
         {items.map((it, i) => (
           <Tooltip key={i} label={`${it.label}: ${it.value}`}>
-            <div className="p-3 md:p-4 cursor-help hover:bg-bg-panel transition">
+            <div className={`p-3 md:p-4 cursor-help hover:bg-bg-panel transition ${i >= 2 ? 'border-t border-line md:border-t-0' : ''}`}>
               <div className="flex items-center gap-1.5 text-2xs text-fg-dim uppercase tracking-wider font-semibold">
                 {it.icon}
                 <span>{it.label}</span>

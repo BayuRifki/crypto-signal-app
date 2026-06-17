@@ -617,8 +617,8 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
 
   // Volatility-adaptive SL floor: when ATR% > 1.5%, raise SL floor to ~0.4×ATR
   // so noise doesn't immediately trigger stops on tight entries.
-  const atrPctForFloor = (atrVal / price) * 100;
-  const volAdjustedSLPct = atrPctForFloor > 1.5 ? Math.max(baseMinSLPct, atrPctForFloor * 0.35) : baseMinSLPct;
+  const atrPctForFloor = atrVal / price;
+  const volAdjustedSLPct = atrPctForFloor > 0.015 ? Math.max(baseMinSLPct, atrPctForFloor * 0.35) : baseMinSLPct;
   const minSLPct = volAdjustedSLPct;
 
   // Dynamic TP multiplier: low confidence → extend TP to improve risk/reward
@@ -674,7 +674,7 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
   if (gatedAction !== 'HOLD') {
     if (slSource === 'sr') reasons.push(`SL placed at S/R ${nearest.support?.price.toFixed(2) ?? ''}${gatedAction === 'SELL' ? ` / ${nearest.resistance?.price.toFixed(2) ?? ''}` : ''}`);
     if (tpSource === 'sr') reasons.push(`TP targets S/R ${nearest.resistance?.price.toFixed(2) ?? ''}${gatedAction === 'SELL' ? ` / ${nearest.support?.price.toFixed(2) ?? ''}` : ''}`);
-    if (volAdjustedSLPct > baseMinSLPct) reasons.push(`Vol-adaptive SL floor raised to ${(volAdjustedSLPct * 100).toFixed(2)}% (ATR ${atrPctForFloor.toFixed(2)}%)`);
+    if (volAdjustedSLPct > baseMinSLPct) reasons.push(`Vol-adaptive SL floor raised to ${(volAdjustedSLPct * 100).toFixed(2)}% (ATR ${(atrPctForFloor * 100).toFixed(2)}%)`);
     if (rr < 1.2) reasons.push(`⚠ Tight R:R 1:${rr.toFixed(2)}`);
   }
 

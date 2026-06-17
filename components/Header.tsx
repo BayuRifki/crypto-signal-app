@@ -31,17 +31,40 @@ const fmtVol = (n: number) => {
   return `${n.toFixed(0)}`;
 };
 
+const LogoMark = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="text-bg-base">
+    <defs>
+      <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#10b981" />
+        <stop offset="50%" stopColor="#0ea5e9" />
+        <stop offset="100%" stopColor="#8b5cf6" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M3 17 L9 11 L13 14 L21 5"
+      stroke="url(#logoGrad)"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+    <circle cx="9" cy="11" r="1.5" fill="url(#logoGrad)" />
+    <circle cx="13" cy="14" r="1.5" fill="url(#logoGrad)" />
+    <circle cx="21" cy="5" r="2" fill="url(#logoGrad)" />
+  </svg>
+);
+
 export default function Header({ signal, ticker, isLoading, isRefreshing, onRefresh, onOpenSettings, lastUpdate }: Props) {
   const s = signal ? ACTION_STYLE[signal.action] : null;
   const change = ticker?.priceChangePercent ?? null;
   const up = (change ?? 0) >= 0;
 
   return (
-    <header className="sticky top-0 z-30 backdrop-blur bg-bg-base/85 border-b border-line" style={{ paddingTop: 'var(--safe-top)' }}>
+    <header className="sticky top-0 z-header backdrop-blur bg-bg-base/85 border-b border-line" style={{ paddingTop: 'var(--safe-top)' }}>
       <div className="max-w-[1600px] mx-auto px-3 md:px-5 h-14 flex items-center gap-2 md:gap-3">
         <div className="flex items-center gap-2 mr-1">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-buy via-info to-accent flex items-center justify-center font-black text-bg-base text-sm">
-            Σ
+          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-buy via-info to-accent flex items-center justify-center flex-shrink-0">
+            <LogoMark />
           </div>
           <div className="hidden md:block">
             <div className="text-sm font-bold text-fg leading-none">Crypto Signal</div>
@@ -52,13 +75,15 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
         <div className="h-6 w-px bg-line hidden md:block" />
 
         {ticker && (
-          <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-md bg-bg-elevated border border-line">
-            <span className="text-sm font-mono font-bold tabular text-fg">{fmtPrice(ticker.lastPrice)}</span>
-            <span className={`text-xs font-mono tabular font-bold ${up ? 'text-buy' : 'text-sell'}`}>
-              {up ? '+' : ''}{change!.toFixed(2)}%
-            </span>
-            <span className="text-2xs text-fg-dim tabular">Vol {fmtVol(ticker.quoteVolume)}</span>
-          </div>
+          <Tooltip label={`24h volume: ${fmtVol(ticker.quoteVolume)}`}>
+            <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-md bg-bg-elevated border border-line">
+              <span className="text-sm font-mono font-bold tabular text-fg">{fmtPrice(ticker.lastPrice)}</span>
+              <span className={`text-xs font-mono tabular font-bold ${up ? 'text-buy' : 'text-sell'}`}>
+                {up ? '+' : ''}{change!.toFixed(2)}%
+              </span>
+              <span className="text-2xs text-fg-dim tabular hidden lg:inline">Vol {fmtVol(ticker.quoteVolume)}</span>
+            </div>
+          </Tooltip>
         )}
 
         <div className="flex-1 min-w-0" />
@@ -80,7 +105,8 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="w-9 h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition focus-ring disabled:opacity-50"
+              aria-label="Refresh data"
+              className="w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition disabled:opacity-50"
             >
               <Icon.Refresh size={16} className={isRefreshing ? 'animate-spin-slow' : ''} />
             </button>
@@ -88,7 +114,8 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
           <Tooltip label="Settings">
             <button
               onClick={onOpenSettings}
-              className="w-9 h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition focus-ring"
+              aria-label="Open settings"
+              className="w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition"
             >
               <Icon.Settings size={16} />
             </button>

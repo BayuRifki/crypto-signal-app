@@ -17,7 +17,6 @@ import BacktestPanel from '../components/BacktestPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import Tabs from '../components/Tabs';
 
-import { useKlines } from '../lib/hooks/useKlines';
 import { useTicker } from '../lib/hooks/useTicker';
 import { useSignal } from '../lib/hooks/useSignal';
 import { useCandleSource } from '../lib/hooks/useCandleSource';
@@ -65,7 +64,8 @@ export default function HomePage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LAST_PAIRS_KEY);
-      const arr: string[] = Array.isArray(JSON.parse(raw || 'null')) ? JSON.parse(raw!) : DEFAULT_PAIRS;
+      const parsed = raw ? JSON.parse(raw) : null;
+      const arr: string[] = Array.isArray(parsed) ? parsed : DEFAULT_PAIRS;
       const next = [symbol, ...arr.filter((s) => s !== symbol)].slice(0, 6);
       localStorage.setItem(LAST_PAIRS_KEY, JSON.stringify(next));
     } catch {}
@@ -81,7 +81,8 @@ export default function HomePage() {
   }, [refreshKlines, refreshTicker]);
 
   return (
-    <div className="min-h-screen pb-24 md:pb-6">
+    <div className="min-h-screen pb-28 md:pb-6">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <Header
         symbol={symbol}
         interval={interval}
@@ -94,7 +95,7 @@ export default function HomePage() {
         lastUpdate={lastUpdate}
       />
 
-      <main className="max-w-[1600px] mx-auto px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
+      <main id="main-content" className="max-w-[1600px] mx-auto px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <ExchangeSelector value={exchange} onChange={setExchange} />
           <PairSelector
@@ -115,7 +116,7 @@ export default function HomePage() {
           />
         </div>
 
-        <KPIStrip symbol={symbol} signal={signal} ticker={ticker} interval={interval} />
+        <KPIStrip signal={signal} ticker={ticker} />
 
         {realError && !isDemo && (
           <div className="card p-4 border-warn/40 text-sm flex items-start gap-2">
@@ -137,7 +138,7 @@ export default function HomePage() {
             <div className="card overflow-hidden">
               <div className="h-[55vh] min-h-[360px] max-h-[640px]">
                 {klinesLoading && candles.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3">
+                  <div className="h-full flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
                     <div className="w-8 h-8 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
                     <div className="text-sm text-fg-dim">Loading {symbol} {interval}…</div>
                   </div>
@@ -159,40 +160,49 @@ export default function HomePage() {
               </div>
             </div>
 
-            <MultiTimeframeRow symbol={symbol} activeTf={interval} exchange={exchange} />
+            <MultiTimeframeRow symbol={symbol} activeTf={interval} exchange={exchange} onChangeTf={setInterval} />
 
             <div className="space-y-3">
               <Tabs
                 value={bottomTab}
                 onChange={(v) => setBottomTab(v as 'structure' | 'backtest' | 'weightlab' | 'history')}
                 size="sm"
+                ariaLabel="Analysis panels"
                 tabs={[
                   { id: 'structure', label: 'Market Structure', icon: <Icon.Layers size={12} /> },
                   { id: 'backtest', label: 'Backtest', icon: <Icon.Activity size={12} /> },
-                  { id: 'weightlab', label: 'Weight Lab', icon: <Icon.Box size={12} />, badge: weightLab.isCustom ? <span className="w-1.5 h-1.5 rounded-full bg-accent" /> : undefined },
+                  { id: 'weightlab', label: 'Weight Lab', icon: <Icon.Box size={12} />, badge: weightLab.isCustom ? <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-label="custom weights active" /> : undefined },
                   { id: 'history', label: 'History', icon: <Icon.Clock size={12} /> },
                 ]}
               />
               {bottomTab === 'structure' ? (
-                <StructurePanel
-                  price={signal?.price ?? 0}
-                  fvgs={signal?.fvgs ?? []}
-                  orderBlocks={signal?.orderBlocks ?? []}
-                  msSignals={signal?.marketStructure ?? []}
-                  sweeps={signal?.sweeps ?? []}
-                  srLevels={srLevels}
-                />
+                <div role="tabpanel" id="panel-structure" aria-labelledby="tab-structure">
+                  <StructurePanel
+                    price={signal?.price ?? 0}
+                    fvgs={signal?.fvgs ?? []}
+                    orderBlocks={signal?.orderBlocks ?? []}
+                    msSignals={signal?.marketStructure ?? []}
+                    sweeps={signal?.sweeps ?? []}
+                    srLevels={srLevels}
+                  />
+                </div>
               ) : bottomTab === 'backtest' ? (
-                <BacktestPanel candles={candles} symbol={symbol} interval={interval} weights={weightLab.weights} />
+                <div role="tabpanel" id="panel-backtest" aria-labelledby="tab-backtest">
+                  <BacktestPanel candles={candles} symbol={symbol} interval={interval} weights={weightLab.weights} />
+                </div>
               ) : bottomTab === 'weightlab' ? (
-                <WeightLabPanel candles={candles} />
+                <div role="tabpanel" id="panel-weightlab" aria-labelledby="tab-weightlab">
+                  <WeightLabPanel candles={candles} lab={weightLab} />
+                </div>
               ) : (
-                <HistoryPanel symbol={symbol} interval={interval} />
+                <div role="tabpanel" id="panel-history" aria-labelledby="tab-history">
+                  <HistoryPanel symbol={symbol} interval={interval} />
+                </div>
               )}
             </div>
 
             <div className="text-2xs text-fg-dim text-center py-2">
-              Data: Binance public API · Not financial advice · For analysis only
+              Data from {exchange} · Not financial advice · For analysis only
             </div>
           </div>
 

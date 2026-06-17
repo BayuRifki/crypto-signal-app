@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSymbols } from '../lib/hooks/useSymbols';
 import { POPULAR_USDT_PAIRS, POPULAR_TRENDING } from '../lib/popularPairs';
 import type { ExchangeId, SymbolInfo } from '../lib/exchanges/types';
@@ -25,32 +25,47 @@ const dedupe = (pairs: SymbolInfo[]): SymbolInfo[] => {
   return out;
 };
 
-const MAX_RENDER = 5000;
+const ITEM_HEIGHT = 44;
+const VISIBLE_COUNT = 8;
 
 export default function PairSelector({ value, onChange, lastPrice, change24h, exchange }: Props) {
   const { symbols, isLoading, error, refresh } = useSymbols(exchange);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && open) setOpen(false);
+    };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
-  // Source of truth: the live exchange list.
-  // Fallback to popular only when fetch is in flight, errored, or returned empty.
+  useEffect(() => {
+    if (open) {
+      const t = window.setTimeout(() => inputRef.current?.focus(), 50);
+      return () => window.clearTimeout(t);
+    }
+  }, [open]);
+
   const useFallback = isLoading || !!error || (symbols && symbols.length === 0);
   const source: SymbolInfo[] = useMemo(() => {
     const apiList = (symbols ?? []).filter((s) => s.quote === 'USDT');
-    if (apiList.length > 0) return apiList;
-    return POPULAR_USDT_PAIRS;
-  }, [symbols, isLoading, error]);
+    if (apiList.length > 0) return dedupe(apiList);
+    return dedupe(POPULAR_USDT_PAIRS);
+  }, [symbols]);
 
-  // Always include the current value so it's visible even if not in the list
   const display: SymbolInfo[] = useMemo(() => {
     if (source.some((s) => s.symbol === value)) return source;
     const base = value.endsWith('USDT') ? value.slice(0, -4) : value;
@@ -59,46 +74,94 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
 
   const filtered = useMemo(() => {
     const q = query.toUpperCase().trim();
-    if (!q) return display.slice(0, MAX_RENDER);
-    return display.filter((s) => s.symbol.includes(q) || s.base.includes(q)).slice(0, MAX_RENDER);
+    if (!q) return display;
+    return display.filter((s) => s.symbol.includes(q) || s.base.includes(q));
   }, [display, query]);
+
+  const totalHeight = filtered.length * ITEM_HEIGHT;
+  const startIndex = Math.floor(scrollOffset / ITEM_HEIGHT);
+  const endIndex = Math.min(filtered.length, startIndex + VISIBLE_COUNT + 4);
+  const visibleItems = filtered.slice(startIndex, endIndex);
+  const offsetY = startIndex * ITEM_HEIGHT;
+
+  const handleScroll = useCallback(() => {
+    if (scrollRef.current) {
+      setScrollOffset(scrollRef.current.scrollTop);
+    }
+  }, []);
+
+  const handleSelect = useCallback((symbol: string) => {
+    onChange(symbol);
+    setOpen(false);
+    setQuery('');
+  }, [onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const currentIndex = filtered.findIndex((s) => s.symbol === value);
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      const nextIndex = Math.max(0, Math.min(filtered.length - 1, currentIndex + dir));
+      if (filtered[nextIndex]) {
+        onChange(filtered[nextIndex].symbol);
+        const itemTop = nextIndex * ITEM_HEIGHT;
+        if (scrollRef.current) {
+          if (itemTop < scrollRef.current.scrollTop) {
+            scrollRef.current.scrollTop = itemTop;
+          } else if (itemTop + ITEM_HEIGHT > scrollRef.current.scrollTop + scrollRef.current.clientHeight) {
+            scrollRef.current.scrollTop = itemTop + ITEM_HEIGHT - scrollRef.current.clientHeight;
+          }
+        }
+      }
+    }
+  }, [filtered, value, onChange]);
 
   return (
     <div ref={wrapRef} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 h-10 rounded-md bg-bg-elevated border border-line hover:border-line-strong transition focus-ring"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={`Trading pair: ${value}. Click to change.`}
+        className="flex items-center gap-2 h-10 px-3 rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition cursor-pointer"
       >
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-info/30 to-accent/30 flex items-center justify-center text-2xs font-black text-fg">
+        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-info/30 to-accent/30 flex items-center justify-center text-2xs font-black text-fg flex-shrink-0">
           {value.replace('USDT', '').slice(0, 3)}
         </div>
-        <div className="text-left">
-          <div className="text-sm font-bold text-fg leading-tight">{value}</div>
+        <div className="text-left min-w-0">
+          <div className="text-sm font-bold text-fg leading-tight truncate">{value}</div>
           {lastPrice !== undefined && lastPrice !== null && (
             <div className="flex items-center gap-1.5 text-2xs leading-tight">
-              <span className="text-fg tabular">{fmtPrice(lastPrice)}</span>
+              <span className="text-fg tabular truncate">{fmtPrice(lastPrice)}</span>
               {change24h !== undefined && change24h !== null && (
-                <span className={change24h >= 0 ? 'text-buy' : 'text-sell'}>
+                <span className={`tabular ${change24h >= 0 ? 'text-buy' : 'text-sell'}`}>
                   {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
                 </span>
               )}
             </div>
           )}
         </div>
-        <Icon.Chevron size={14} className={`text-fg-muted transition ${open ? 'rotate-180' : ''}`} />
+        <Icon.Chevron size={14} className={`text-fg-muted flex-shrink-0 transition ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute z-40 top-full left-0 mt-2 w-80 card shadow-elev animate-fade-in">
+        <div
+          role="listbox"
+          aria-label="Trading pairs"
+          aria-activedescendant={value ? `pair-${value}` : undefined}
+          className="absolute z-dropdown top-full left-0 mt-2 w-[min(320px,calc(100vw-1.5rem))] card shadow-elev animate-fade-in"
+        >
           <div className="p-2 border-b border-line">
             <div className="relative">
-              <Icon.Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-dim" />
+              <Icon.Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-dim pointer-events-none" />
               <input
-                autoFocus
+                ref={inputRef}
                 placeholder="Search pair (e.g. BTC, ETH)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full h-9 pl-8 pr-3 text-sm bg-bg-base border border-line rounded text-fg placeholder-fg-dim focus:outline-none focus:border-info"
+                onKeyDown={handleKeyDown}
+                aria-label="Search trading pair"
+                className="w-full h-9 pl-8 pr-3 text-sm bg-bg-base border border-line rounded text-fg placeholder-fg-dim"
               />
             </div>
           </div>
@@ -110,8 +173,8 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
                 {POPULAR_TRENDING.map((s) => (
                   <button
                     key={s}
-                    onClick={() => { onChange(s); setOpen(false); setQuery(''); }}
-                    className="px-2 py-1 text-2xs font-mono rounded bg-bg-panel hover:bg-bg-hover text-fg-muted hover:text-fg transition"
+                    onClick={() => handleSelect(s)}
+                    className="h-7 px-2 text-2xs font-mono rounded bg-bg-panel hover:bg-bg-hover text-fg-muted hover:text-fg transition cursor-pointer"
                   >
                     {s.replace('USDT', '')}
                   </button>
@@ -121,58 +184,74 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
           )}
 
           <div className="px-3 py-1.5 text-2xs text-fg-dim flex items-center justify-between border-t border-b border-line">
-            <span>
+            <span className="truncate">
               {isLoading && (!symbols || symbols.length === 0)
                 ? `Loading ${exchange} pairs…`
                 : useFallback
-                  ? `Popular list · ${source.length} pairs (live fetch unavailable)`
+                  ? `${source.length} pairs (live fetch unavailable)`
                   : `${source.length} pairs from ${exchange}`}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {error && !isLoading && (
-                <span className="text-warn" title={error.message}>
-                  <Icon.Info size={11} className="inline -mt-0.5 mr-0.5" />
-                  using fallback
+                <span className="text-warn flex items-center gap-1" title={error.message}>
+                  <Icon.Info size={11} />
+                  fallback
                 </span>
               )}
               <button
                 onClick={() => refresh()}
                 disabled={isLoading}
-                className="text-fg-dim hover:text-fg transition disabled:opacity-40"
-                title="Refresh pairs from exchange"
+                aria-label="Refresh pairs"
+                className="w-7 h-7 flex items-center justify-center text-fg-dim hover:text-fg hover:bg-bg-panel rounded transition disabled:opacity-40 cursor-pointer"
               >
-                <Icon.Refresh size={11} className={isLoading ? 'animate-spin-slow' : ''} />
+                <Icon.Refresh size={12} className={isLoading ? 'animate-spin-slow' : ''} />
               </button>
             </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto scrollbar-thin">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="max-h-80 overflow-y-auto scrollbar-thin"
+            role="presentation"
+          >
             {isLoading && source.length === 0 && (
               <div className="p-4 text-xs text-fg-dim text-center flex flex-col items-center gap-2">
                 <div className="w-5 h-5 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
                 Fetching from {exchange}…
               </div>
             )}
-            {filtered.map((s) => (
-              <button
-                key={s.symbol}
-                onClick={() => { onChange(s.symbol); setOpen(false); setQuery(''); }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-bg-panel transition flex items-center justify-between gap-2 ${
-                  s.symbol === value ? 'bg-info/10' : ''
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-bg-hover flex items-center justify-center text-2xs font-bold text-fg-muted">
-                    {s.base.slice(0, 2)}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-fg">{s.base}</div>
-                    <div className="text-2xs text-fg-dim">/{s.quote}</div>
-                  </div>
-                </div>
-                {s.symbol === value && <span className="text-info">●</span>}
-              </button>
-            ))}
+            <div style={{ height: totalHeight, position: 'relative' }}>
+              <div style={{ transform: `translateY(${offsetY}px)` }}>
+                {visibleItems.map((s) => {
+                  const selected = s.symbol === value;
+                  return (
+                    <button
+                      key={s.symbol}
+                      id={`pair-${s.symbol}`}
+                      role="option"
+                      aria-selected={selected}
+                      onClick={() => handleSelect(s.symbol)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-bg-panel transition cursor-pointer flex items-center justify-between gap-2 ${
+                        selected ? 'bg-info/10' : ''
+                      }`}
+                      style={{ height: ITEM_HEIGHT }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-full bg-bg-hover flex items-center justify-center text-2xs font-bold text-fg-muted flex-shrink-0">
+                          {s.base.slice(0, 2)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-fg truncate">{s.base}</div>
+                          <div className="text-2xs text-fg-dim">/{s.quote}</div>
+                        </div>
+                      </div>
+                      {selected && <Icon.Activity size={12} className="text-info flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {!isLoading && filtered.length === 0 && (
               <div className="p-4 text-xs text-fg-dim text-center">No results for &ldquo;{query}&rdquo;</div>
             )}

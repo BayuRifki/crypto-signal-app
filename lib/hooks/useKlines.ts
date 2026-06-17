@@ -19,7 +19,7 @@ const fetchProxy = async (exchange: ExchangeId, symbol: string, interval: Interv
 };
 
 const fetcher = async (key: string): Promise<FallbackResult<Candle[]>> => {
-  const [exchange, symbol, interval, limit] = key.split('|') as [ExchangeId, string, Interval, string];
+  const [, exchange, symbol, interval, limit] = key.split('|') as [string, ExchangeId, string, Interval, string];
   const lim = Number(limit);
   try {
     return await fetchDirect(exchange, symbol, interval, lim);
@@ -29,7 +29,7 @@ const fetcher = async (key: string): Promise<FallbackResult<Candle[]>> => {
 };
 
 export const useKlines = (exchange: ExchangeId, symbol: string, interval: Interval, limit = 500) => {
-  const key = `${exchange}|${symbol}|${interval}|${limit}`;
+  const key = `klines|${exchange}|${symbol}|${interval}|${limit}`;
   const { data, error, isLoading, mutate } = useSWR<FallbackResult<Candle[]>>(key, fetcher, {
     refreshInterval: 30000,
     revalidateOnFocus: false,

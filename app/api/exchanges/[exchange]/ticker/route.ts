@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeList, type ExchangeId } from '@/lib/exchanges/registry';
-import { fetchViaCorsProxy, DEFAULT_TIMEOUT_MS } from '@/lib/exchanges/fetch';
+import type { Ticker24h } from '@/lib/exchanges/types';
+import { fetchWithTimeout, fetchViaCorsProxy, DEFAULT_TIMEOUT_MS } from '@/lib/exchanges/fetch';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,6 +10,12 @@ const VALID_EX: ReadonlyArray<ExchangeId> = exchangeList.map((e: { id: ExchangeI
 
 const providerFor = (id: ExchangeId) =>
   exchangeList.find((e: { id: ExchangeId; name: string }) => e.id === id)!;
+
+const tickerResponse = (exchangeId: ExchangeId, ticker: Ticker24h, source: string) =>
+  NextResponse.json(
+    { data: ticker, exchangeId, source },
+    { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' } }
+  );
 
 export async function GET(req: NextRequest, ctx: { params: { exchange: string } }) {
   const exId = ctx.params.exchange.toLowerCase() as ExchangeId;
@@ -19,15 +26,16 @@ export async function GET(req: NextRequest, ctx: { params: { exchange: string } 
   const symbol = (searchParams.get('symbol') || '').toUpperCase();
   if (!symbol) return NextResponse.json({ error: 'symbol required' }, { status: 400 });
 
+  const provider = providerFor(exId);
+
   try {
-    const provider = providerFor(exId);
     const ticker = await provider.getTicker(symbol);
-    return NextResponse.json({ ...ticker, source: 'direct' }, {
-      headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' },
-    });
-  } catch (e) {
+    return tickerResponse(exId, ticker, 'direct');
+  } catch (directErr) {
+    const errorMsg = (directErr as Error).message || 'fetch failed';
+    console.error(`[ticker] direct failed for ${exId}/${symbol}:`, errorMsg);
     return NextResponse.json(
-      { error: (e as Error).message || 'fetch failed' },
+      { error: errorMsg, exchangeId: exId, symbol },
       { status: 502 }
     );
   }

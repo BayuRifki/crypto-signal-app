@@ -58,7 +58,7 @@ export default function SignalCard({ signal }: Props) {
   }[action];
 
   const confidenceColor = signal.confidence >= 70 ? 'text-buy' : signal.confidence >= 40 ? 'text-warn' : 'text-fg-muted';
-  const topReasons = [...signal.reasons].sort((a, b) => b.length - a.length).slice(0, 4);
+  const topReasons = signal.reasons.slice(0, 4);
   const regimeLabel = signal.adx === null ? '—' : signal.regime === 'ranging' ? 'RANGING' : signal.regime === 'trending' ? `TREND ${signal.regimeBias === 'bullish' ? '↑' : signal.regimeBias === 'bearish' ? '↓' : '·'}` : 'TRANSITION';
   const regimeColor = signal.regime === 'ranging' ? 'bg-warn/15 text-warn border-warn/30' : signal.regime === 'trending' ? 'bg-info/15 text-info border-info/30' : 'bg-bg-panel text-fg-muted border-line';
   const hasDiv = signal.rsiDivergence || signal.macdDivergence;

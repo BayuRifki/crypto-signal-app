@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exchangeList, type ExchangeId } from '@/lib/exchanges/registry';
 import type { Interval } from '@/lib/exchanges/types';
 import { fetchWithTimeout, fetchViaCorsProxy, DEFAULT_TIMEOUT_MS } from '@/lib/exchanges/fetch';
+import type { Candle } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,6 +22,12 @@ const tryWithCorsProxy = async (url: string): Promise<Response | null> => {
   }
 };
 
+const klinesResponse = (exchangeId: ExchangeId, candles: Candle[], source: string) =>
+  NextResponse.json(
+    { data: candles, exchangeId, source },
+    { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } }
+  );
+
 export async function GET(req: NextRequest, ctx: { params: { exchange: string } }) {
   const exId = ctx.params.exchange.toLowerCase() as ExchangeId;
   if (!(VALID_EX as readonly string[]).includes(exId)) {
@@ -37,17 +44,12 @@ export async function GET(req: NextRequest, ctx: { params: { exchange: string } 
 
   const provider = providerFor(exId);
 
-  // 1. Direct from server
   try {
     const candles = await provider.getKlines(symbol, interval, limit);
-    return NextResponse.json(
-      { exchange: exId, symbol, interval, count: candles.length, source: 'direct', candles },
-      { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } }
-    );
+    return klinesResponse(exId, candles, 'direct');
   } catch (directErr) {
     const errorMsg = (directErr as Error).message || 'fetch failed';
     console.error(`[klines] direct failed for ${exId}/${symbol}/${interval}:`, errorMsg);
-    // 2. Reconstruct the upstream URL per provider and try a CORS proxy as a last resort
     const upstreamUrl = buildUpstreamKlinesUrl(exId, symbol, interval, limit);
     if (upstreamUrl) {
       try {
@@ -56,24 +58,17 @@ export async function GET(req: NextRequest, ctx: { params: { exchange: string } 
           const body = await proxyRes.json();
           const candles = parseKlinesResponse(exId, body);
           if (candles.length > 0) {
-            return NextResponse.json(
-              { exchange: exId, symbol, interval, count: candles.length, source: 'cors-proxy', candles },
-              { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } }
-            );
+            return klinesResponse(exId, candles, 'server-proxy');
           }
         }
       } catch {
-        // 3. Public CORS proxy as last resort
         try {
           const res = await tryWithCorsProxy(upstreamUrl);
           if (res && res.ok) {
             const body = await res.json();
             const candles = parseKlinesResponse(exId, body);
             if (candles.length > 0) {
-              return NextResponse.json(
-                { exchange: exId, symbol, interval, count: candles.length, source: 'public-cors-proxy', candles },
-                { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } }
-              );
+              return klinesResponse(exId, candles, 'public-cors-proxy');
             }
           }
         } catch (corsErr) {
@@ -82,7 +77,7 @@ export async function GET(req: NextRequest, ctx: { params: { exchange: string } 
       }
     }
     return NextResponse.json(
-      { error: errorMsg, exchange: exId, symbol, interval },
+      { error: errorMsg, exchangeId: exId, symbol, interval },
       { status: 502 }
     );
   }

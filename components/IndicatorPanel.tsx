@@ -141,13 +141,13 @@ export default function IndicatorPanel({ signal }: Props) {
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-4 mt-4 border-t border-line">
         <Tooltip label="EMA 50 (medium-term trend)">
-          <div>
+          <div className="cursor-help hover:bg-bg-panel rounded -m-1 p-1 transition">
             <div className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">EMA 50</div>
             <div className="text-base font-mono font-bold text-warn tabular mt-0.5">{fmtPrice(signal.ema50)}</div>
           </div>
         </Tooltip>
         <Tooltip label="EMA 200 (long-term trend)">
-          <div>
+          <div className="cursor-help hover:bg-bg-panel rounded -m-1 p-1 transition">
             <div className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">EMA 200</div>
             <div className="text-base font-mono font-bold text-accent tabular mt-0.5">{fmtPrice(signal.ema200)}</div>
           </div>

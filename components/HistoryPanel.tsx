@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from './Icon';
 import { getSignalHistory, clearSignalHistory, type SignalHistoryEntry } from '../lib/signalHistory';
 import { fmtPrice } from '../lib/utils';
@@ -23,25 +23,34 @@ const ACTION_COLOR: Record<SignalHistoryEntry['action'], string> = {
 export default function HistoryPanel({ symbol, interval }: Props) {
   const [entries, setEntries] = useState<SignalHistoryEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'symbol'>('all');
+  const [confirming, setConfirming] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setEntries(getSignalHistory());
   }, []);
+
+  useEffect(() => {
+    if (confirming) {
+      const t = window.setTimeout(() => confirmRef.current?.focus(), 50);
+      return () => window.clearTimeout(t);
+    }
+  }, [confirming]);
 
   const filtered = filter === 'symbol' && symbol
     ? entries.filter((e) => e.symbol === symbol && (!interval || e.interval === interval))
     : entries;
 
   const handleClear = () => {
-    if (!confirm('Clear all signal history? This cannot be undone.')) return;
     clearSignalHistory();
     setEntries([]);
+    setConfirming(false);
   };
 
   const handleExport = () => {
     const csv = [
       ['timestamp', 'symbol', 'interval', 'action', 'score', 'confidence', 'regime', 'regimeBias', 'price', 'sl', 'tp', 'rr', 'slSource', 'tpSource', 'reasons'].join(','),
-      ...entries.map((e) => [
+      ...filtered.map((e) => [
         new Date(e.ts).toISOString(),
         e.symbol,
         e.interval,
@@ -73,33 +82,34 @@ export default function HistoryPanel({ symbol, interval }: Props) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-2xs text-fg-dim uppercase tracking-wider font-bold">
           <Icon.Clock size={12} />
-          <span>Signal History · {entries.length}</span>
+          <span>Signal History · {filtered.length}{entries.length !== filtered.length ? ` / ${entries.length} total` : ''}</span>
         </div>
         <div className="flex items-center gap-2">
           {symbol && (
             <button
               onClick={() => setFilter(filter === 'all' ? 'symbol' : 'all')}
-              className={`text-2xs px-2 py-1 rounded border font-bold tabular transition ${
+              aria-pressed={filter === 'symbol'}
+              className={`h-7 px-2 text-2xs rounded border font-bold tabular transition cursor-pointer ${
                 filter === 'symbol'
                   ? 'bg-info/15 border-info/40 text-info'
-                  : 'bg-bg-elevated border-line text-fg-muted hover:border-line-strong'
+                  : 'bg-bg-elevated border-line text-fg-muted hover:border-line-strong hover:text-fg'
               }`}
             >
               {filter === 'symbol' ? `${symbol}` : 'All pairs'}
             </button>
           )}
-          {entries.length > 0 && (
+          {entries.length > 0 && !confirming && (
             <>
               <button
                 onClick={handleExport}
-                className="text-2xs px-2 py-1 rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong"
+                className="h-7 px-2 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong hover:text-fg transition cursor-pointer"
                 title="Export to CSV"
               >
                 CSV
               </button>
               <button
-                onClick={handleClear}
-                className="text-2xs px-2 py-1 rounded bg-bg-elevated border border-line text-fg-muted hover:border-sell/40 hover:text-sell"
+                onClick={() => setConfirming(true)}
+                className="h-7 px-2 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-sell/40 hover:text-sell transition cursor-pointer"
                 title="Clear history"
               >
                 Clear
@@ -109,6 +119,30 @@ export default function HistoryPanel({ symbol, interval }: Props) {
         </div>
       </div>
 
+      {confirming && (
+        <div role="alertdialog" aria-label="Confirm clear history" className="flex items-center justify-between gap-3 p-3 rounded bg-warn/10 border border-warn/40">
+          <div className="flex items-center gap-2 text-xs text-warn">
+            <Icon.Info size={14} />
+            <span>Delete all {entries.length} history entries? This cannot be undone.</span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setConfirming(false)}
+              className="h-8 px-3 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong hover:text-fg font-bold transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              ref={confirmRef}
+              onClick={handleClear}
+              className="h-8 px-3 text-2xs rounded bg-sell/20 border border-sell/50 text-sell hover:bg-sell/30 font-bold transition cursor-pointer"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-xs text-fg-muted py-4 text-center">
           {entries.length === 0 ? 'No signals logged yet. Signals will appear here as they are computed.' : 'No signals match the current filter.'}
@@ -116,8 +150,8 @@ export default function HistoryPanel({ symbol, interval }: Props) {
       ) : (
         <div className="max-h-96 overflow-y-auto space-y-1.5 -mx-1 px-1">
           {filtered.slice(0, 50).map((e) => {
-            const slPct = ((e.sl - e.price) / e.price) * 100;
-            const tpPct = ((e.tp - e.price) / e.price) * 100;
+            const slPct = e.action === 'SELL' ? ((e.sl - e.price) / e.price) * 100 : ((e.price - e.sl) / e.price) * 100;
+            const tpPct = e.action === 'SELL' ? ((e.price - e.tp) / e.price) * 100 : ((e.tp - e.price) / e.price) * 100;
             return (
               <div key={`${e.ts}-${e.symbol}-${e.interval}`} className="p-2 rounded bg-bg-elevated border border-line hover:border-line-strong transition">
                 <div className="flex items-center justify-between gap-2 mb-1">
@@ -163,6 +197,12 @@ export default function HistoryPanel({ symbol, interval }: Props) {
           })}
         </div>
       )}
+
+      {filtered.length > 50 && (
+          <div className="text-2xs text-fg-dim text-center pt-1">
+            Showing 50 of {filtered.length} entries. Export CSV for full data.
+          </div>
+        )}
 
       <div className="text-2xs text-fg-dim leading-relaxed border-t border-line pt-2">
         Signals are auto-logged when action or score changes. Max 200 entries kept in localStorage.
