@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/adx.test.ts && tsx tests/divergence.test.ts && tsx tests/rsi.test.ts && tsx tests/macd.test.ts && tsx tests/bollinger.test.ts && tsx tests/ema.test.ts && tsx tests/fvg.test.ts && tsx tests/orderBlock.test.ts && tsx tests/marketStructure.test.ts && tsx tests/liquiditySweep.test.ts && tsx tests/volume.test.ts && tsx tests/supportResistance.test.ts && tsx tests/volumeProfile.test.ts && tsx tests/atr.test.ts && tsx tests/scoring.test.ts && tsx tests/backtest.test.ts && tsx tests/exchanges.test.ts && tsx tests/apiContract.test.ts && tsx tests/riskMathRegression.test.ts && tsx tests/weightOptimizer.test.ts && tsx tests/weightLabHook.test.ts && tsx tests/weightLabPanel.test.tsx && tsx tests/popularPairs.test.ts && tsx tests/demoData.test.ts && tsx tests/fallback.test.ts && tsx tests/gracefulDegradation.test.ts && tsx tests/webWorker.test.ts"
+    "test": "tsx tests/adx.test.ts && tsx tests/divergence.test.ts && tsx tests/rsi.test.ts && tsx tests/macd.test.ts && tsx tests/bollinger.test.ts && tsx tests/ema.test.ts && tsx tests/fvg.test.ts && tsx tests/orderBlock.test.ts && tsx tests/marketStructure.test.ts && tsx tests/liquiditySweep.test.ts && tsx tests/volume.test.ts && tsx tests/supportResistance.test.ts && tsx tests/volumeProfile.test.ts && tsx tests/atr.test.ts && tsx tests/scoring.test.ts && tsx tests/backtest.test.ts && tsx tests/exchanges.test.ts && tsx tests/apiContract.test.ts && tsx tests/riskMathRegression.test.ts && tsx tests/a11yInteraction.test.ts && tsx tests/weightOptimizer.test.ts && tsx tests/weightLabHook.test.ts && tsx tests/weightLabPanel.test.tsx && tsx tests/popularPairs.test.ts && tsx tests/demoData.test.ts && tsx tests/fallback.test.ts && tsx tests/gracefulDegradation.test.ts && tsx tests/webWorker.test.ts && tsx tests/chartViewport.test.ts && tsx tests/pairSelectorNav.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "lightweight-charts": "^4.2.1",
@@ -18,12 +19,16 @@
     "swr": "^2.2.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.15",
+    "jsdom": "^29.1.1",
+    "jsdom-global": "^3.0.2",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "tsx": "^4.22.4",

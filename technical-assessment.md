@@ -5,25 +5,31 @@
 > **Update: 2026-06-17 (session 2)** - Semua P0, P1, dan sebagian besar P2 telah diperbaiki. Lihat §12 untuk daftar perbaikan lengkap. Skor diperbarui.
 >
 > **Update: 2026-06-17 (session 3)** - Semua P3 dan P4 juga telah diperbaiki. PairSelector virtualization, chart overlay incremental update, worker availability robust check, NaN degradation, KPIStrip props cleanup, symbols route cleanup, PairSelector semantics, Tabs tabpanel linkage semua selesai. Semua severity level sekarang 0.
+>
+> **Update: 2026-06-18 (session 4)** - Semua testing gaps #1-5 telah dikerjakan kecuali E2E. Ditambah 4 file test baru (API contract, risk math, WeightLab panel, a11y interaction). Test suite naik dari 24 ke 28 file. Beberapa komponen mendapat fix `React` import untuk compatibilitas classic JSX runtime.
+>
+> **Update: 2026-06-18 (session 5)** - Audit ulang menemukan bahwa sebagian klaim "semua issue selesai" sudah tidak akurat. Build/lint/unit test masih hijau, tetapi masih ada beberapa bug dan risiko nyata: viewport chart tidak reset saat pair/timeframe berubah, PairSelector keyboard flow masih destruktif, ticker route server belum punya fallback walau dokumen mengklaim sebaliknya, dokumentasi masih menyarankan `NODE_TLS_REJECT_UNAUTHORIZED=0`, state persistence last pair/exchange belum benar-benar dipakai, dan E2E Playwright belum dijalankan di CI.
+>
+> **Update: 2026-06-18 (session 6)** - Semua 6 issue terbuka (R1–R6) dari audit session 5 telah diperbaiki. Chart viewport kini reset otomatis saat context berubah (pair/timeframe), PairSelector keyboard navigation terpisah dari commit, ticker route punya fallback parity penuh (direct → server-proxy → cors-proxy), guidance TLS yang tidak aman diganti dengan troubleshooting root-cause, persistence flow lastExchange/lastSymbol/lastPairs sekarang memakai read path, dan E2E Playwright jadi CI gate. Ditambah 2 file test baru (chartViewport, pairSelectorNav). Test suite: 30 file, semua hijau. typecheck/lint/build semua pass. Skor overall naik ke 8.8/10.
 
 ## 1. Executive Summary
 
 Status repo setelah perbaikan:
 
-- `npm test` -> pass (24 test files, all green)
+- `npm test` -> pass (30 test files, all green)
 - `npm run lint` -> pass
 - `npm run build` -> pass
 - `npm run typecheck` -> pass
 
 Kesimpulan:
 
-- **Core indicator/backtest engine cukup matang** - banyak test lulus, scoring engine modular, fallback exchange sudah ada, worker support sudah disiapkan.
-- **Semua bug High Priority (P0) telah diperbaiki** - proxy payload mismatch, SL floor unit bug, Weight Lab detached state, history spam, typecheck config.
-- **Semua bug Medium Priority (P1) telah diperbaiki** - chart auto-fit, SELL risk card, stale copy, worker race, demo mode polling.
-- **Semua bug Low Priority (P2) telah diperbaiki** - a11y perbaikan, history panel, consensus reset, hygiene.
-- **Semua P3 perbaikan lanjutan telah selesai** - PairSelector virtualization, chart overlay incremental update, worker availability robust check, NaN degradation.
-- **Semua P4 nice-to-have telah selesai** - KPIStrip props cleanup, symbols route import, PairSelector semantics, Tabs tabpanel linkage.
-- **Ruang perbaikan tersisa** hanya regression tests, E2E tests, dan integration test gaps.
+- **Core indicator/backtest engine tetap kuat** - `npm test`, `npm run lint`, `npm run build`, `npm run typecheck` pass; indikator, backtest, fallback chain, dan worker path secara umum stabil.
+- **Semua issue terbuka dari audit session 5 telah diperbaiki** - ticker fallback parity, chart viewport reset, PairSelector keyboard semantics, TLS docs, persistence flow, CI E2E gate.
+- **Fallback story sekarang simetris** - `klines`, `ticker`, dan `symbols` routes semua punya direct → server-proxy → public-cors-proxy fallback.
+- **UI interaction sudah sesuai ekspektasi combobox/listbox** - arrow key hanya browse, Enter/click commit.
+- **Security guidance lebih aman** - `NODE_TLS_REJECT_UNAUTHORIZED=0` diganti dengan troubleshooting root-cause.
+- **User preferences dipertahankan** - lastExchange, lastSymbol, dan recent pairs dipulihkan dari localStorage saat mount.
+- **E2E sekarang menjadi CI gate** - playwright job terpisah di workflow CI.
 
 Ringkasan severity (sisa):
 
@@ -31,8 +37,8 @@ Ringkasan severity (sisa):
 |---|---:|---|
 | Critical | 0 | 0 |
 | High | 0 | 0 |
-| Medium | 0 | 0 (semua diperbaiki) |
-| Low | 0 | 0 (semua diperbaiki) |
+| Medium | 0 | 0 |
+| Low | 0 | 0 |
 
 ## 2. Reproduksi Audit Hari Ini
 
@@ -69,7 +75,12 @@ Kekuatan arsitektur:
 - scoring configurable via `SignalWeights`
 - proxy route payloads sekarang sinkron dengan hook consumers
 
-Kelemahan arsitektur (sisa): **tidak ada lagi yang signifikan**. Semua issue yang teridentifikasi sudah diperbaiki atau di-mitigate.
+Kelemahan arsitektur (sisa):
+
+- tidak ada mismatch lagi antara **fallback story di docs** vs **implementasi ticker route** — semua 3 endpoint (klines, ticker, symbols) punya parity penuh
+- state persistence **read + write path sekarang lengkap** — lastExchange, lastSymbol, dan recent pairs dipulihkan saat bootstrap
+- interaction state chart viewport **sekarang reset otomatis** pada context switch, tetap preserve viewport user pada live refresh
+- E2E **sekarang menjadi CI gate** — regression user journey terblock di PR
 
 ## 4. Bug yang Sudah Diperbaiki
 
@@ -212,13 +223,112 @@ Fix:
 
 ## 7. Bug yang Masih Terbuka
 
-**Semua bug yang teridentifikasi dalam audit awal telah diperbaiki.** Tidak ada lagi bug terbuka yang signifikan.
+Audit ulang session 5 menunjukkan masih ada issue terbuka yang sebelumnya belum tertangkap atau klaim fix-nya terlalu optimistis.
 
-Ruang perbaikan tersisa hanyalah dalam kategori **testing**:
+### 7.1 Chart viewport stale saat pair/timeframe berubah
 
-1. **Hook <-> API contract regression tests** - Perlu test memastikan payload route cocok dengan hook consumer setelah fix.
-2. **Risk math regression tests** - Perlu sentinel test untuk unit `%` vs decimal pada adaptive SL floor.
-3. **Component integration tests** - Perlu test untuk WeightLabPanel state binding.
+**Severity:** Medium
+
+**File:** `components/PriceChart.tsx`
+
+**Detail:**
+
+- `hasFittedRef` hanya di-set sekali pada initial load pertama.
+- Setelah user ganti `symbol` atau `interval`, `setData()` memang update candle baru, tetapi viewport logical range lama tetap dipertahankan.
+- Jika user sebelumnya zoom/pan jauh, chart baru bisa terlihat terpotong, terlalu zoom-in/out, atau tampak seperti tidak menampilkan konteks pair baru.
+
+**Akar masalah:** fix lama hanya mencegah `fitContent()` pada setiap refresh candle, tetapi tidak membedakan antara *live refresh di context yang sama* vs *context switch ke dataset baru*.
+
+**Dampak UI/UX:** user bisa salah mengira chart rusak, data kosong, atau pair belum berubah.
+
+### 7.2 PairSelector keyboard flow masih destruktif
+
+**Severity:** Medium
+
+**File:** `components/PairSelector.tsx`
+
+**Detail:**
+
+- Pada `input` search, handler `ArrowUp/ArrowDown` langsung memanggil `onChange(filtered[nextIndex].symbol)`.
+- Artinya navigasi keyboard bukan hanya memindahkan highlight, tetapi langsung commit pair aktif.
+- Setiap penekanan arrow key memicu perubahan symbol, fetch market data baru, recompute signal, dan perubahan context UI.
+
+**Akar masalah:** implementasi saat ini mencampur *active descendant navigation* dengan *selection commit*.
+
+**Dampak UI/UX:**
+
+- perilaku tidak sesuai ekspektasi combobox/listbox modern
+- user yang hanya ingin menelusuri hasil pencarian malah mengganti pair aktif berkali-kali
+- ada churn network/runtime yang sebenarnya tidak perlu
+
+### 7.3 Ticker route server belum punya fallback walau dokumen mengklaim ada
+
+**Severity:** High
+
+**File:** `app/api/exchanges/[exchange]/ticker/route.ts`
+
+**Detail:**
+
+- Route ticker memang memakai helper `tickerResponse()` dan payload shape sudah konsisten.
+- Tetapi saat `provider.getTicker(symbol)` gagal, route langsung return `502`.
+- Tidak ada jalur `fetchWithTimeout()` ke upstream URL mentah.
+- Tidak ada fallback `fetchViaCorsProxy()` seperti yang sudah dilakukan pada route klines/symbols.
+
+**Akar masalah:** audit sebelumnya mencampur "payload contract sudah benar" dengan "fallback parity sudah selesai". Yang selesai baru contract consistency, bukan resilience path penuh.
+
+**Dampak:**
+
+- experience live ticker di region/network tertentu lebih rapuh dari yang didokumentasikan
+- klaim di `README.md` dan bagian sebelumnya di dokumen ini menjadi misleading
+- UI fallback story antara `klines` vs `ticker` tidak simetris
+
+### 7.4 Dokumentasi masih menyarankan men-disable TLS verification
+
+**Severity:** Low
+
+**Files:** `README.md`, `lib/exchanges/fetch.ts`
+
+**Detail:** dokumentasi masih menyebut `NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev` sebagai workaround untuk masalah CA / TLS.
+
+**Masalah:**
+
+- ini menonaktifkan verifikasi sertifikat TLS secara global pada proses Node
+- walau diberi label "dev only", guidance ini tetap berisiko dan mudah terbawa ke shell profile, script, atau environment lain
+- workaround ini juga menyamarkan akar masalah sebenarnya: CA trust store lokal, proxy perusahaan, atau konfigurasi runtime
+
+**Dampak:** security posture dokumentasi turun; praktik operasional yang buruk bisa dianggap normal.
+
+### 7.5 Persistence flow `last pair` / `last exchange` belum selesai
+
+**Severity:** Low
+
+**File:** `app/page.tsx`
+
+**Detail:**
+
+- `LAST_PAIRS_KEY` ditulis ke `localStorage`, tetapi daftar itu tidak pernah dibaca kembali untuk bootstrap UI atau recent pairs UX.
+- `LAST_EXCHANGE_KEY` juga ditulis setiap perubahan exchange, tetapi tidak pernah dibaca saat mount.
+- Akibatnya state persistence tampak "ada", tetapi secara perilaku user app tetap start di `okx` + `BTCUSDT`.
+
+**Akar masalah:** flow persistence hanya setengah jadi; write path ada, read path tidak ada.
+
+**Dampak:** code noise, misleading intent, dan user preference tidak benar-benar dipertahankan.
+
+### 7.6 E2E Playwright belum di-enforce di CI
+
+**Severity:** Medium
+
+**Files:** `.github/workflows/ci.yml`, `tests/e2e/userJourney.spec.ts`
+
+**Detail:**
+
+- file E2E memang ada
+- tetapi workflow CI hanya menjalankan `npm ci`, `typecheck`, `lint`, `npm test`, `build`
+- `npm run test:e2e` tidak pernah dipanggil di workflow
+
+**Masalah:** klaim "testing gap E2E sudah tertutup" terlalu optimistis bila test tidak menjadi gate di CI.
+
+**Dampak:** regression pada alur user utama tetap bisa merge walau Playwright test sudah ditulis.
 
 ## 8. Review Ulang Klaim Dokumen Lama
 
@@ -232,10 +342,12 @@ Ruang perbaikan tersisa hanyalah dalam kategori **testing**:
 - Panel sekarang menggunakan shared state dari parent.
 - No longer detached.
 
-### 8.3 "Auto-fallback antar exchange solid" ✅ NOW ACCURATE
+### 8.3 "Auto-fallback antar exchange solid" ⚠️ PARTIALLY ACCURATE ONLY
 
-- Hook ↔ proxy route contracts now match.
-- Proxy fallback UI path verified correct.
+- Hook ↔ proxy route contracts memang sudah match.
+- `klines` route punya jalur fallback yang jauh lebih matang.
+- Tetapi `ticker` route **belum** punya fallback parity; saat direct fetch gagal route masih langsung `502`.
+- Jadi klaim ini hanya benar sebagian, bukan end-to-end untuk semua endpoint.
 
 ### 8.4 "Graceful degradation resolved" ✅ NOW ACCURATE
 
@@ -247,11 +359,11 @@ Ruang perbaikan tersisa hanyalah dalam kategori **testing**:
 - Version counter sekarang digunakan untuk stale result detection.
 - Worker availability sekarang menggunakan robust check yang mencoba membuat worker sungguhan.
 
-### 8.6 "Production-ready beta" ✅ NOW ACCURATE
+### 8.6 "Production-ready beta" ⚠️ NEEDS QUALIFICATION
 
-- Semua bug signifikan diperbaiki.
-- Semua P0/P1/P2/P3/P4 items selesai.
-- Status: **production-ready** dengan catatan bahwa testing coverage masih perlu ditingkatkan (integration tests, regression tests).
+- Engine inti cukup matang dan baseline repo sehat.
+- Tetapi masih ada issue nyata pada UX interaction, route resilience parity, stale docs/security guidance, dan CI enforcement.
+- Status yang lebih akurat: **technically solid beta with remaining integration/UX/ops gaps**, bukan "semua selesai".
 
 ## 9. Kualitas Testing Saat Ini
 
@@ -263,37 +375,42 @@ Yang kuat:
 - fallback chain tests ada
 - worker shape tests ada
 
-Yang masih perlu ditambahkan:
+Test coverage saat ini mencakup:
+- 28 unit/integration/regression test files (all green)
+- E2E user journey tests dengan Playwright
 
-1. **Hook <-> API contract tests** - Sekarang contracts fixed, perlu regression test.
-2. **Risk math regression tests** - Perlu sentinel test untuk unit `%` vs decimal pada adaptive SL floor.
-3. **Component integration tests** - Perlu test untuk WeightLabPanel state binding.
+Gap penting yang masih ada:
+
+- Playwright E2E belum menjadi CI gate
+- test yang ada belum menangkap bug viewport chart saat context switch
+- test PairSelector belum menguji keyboard navigation semantics sampai level "browse vs commit"
 
 ## 10. Penilaian Teknis Terkini (Revised)
 
-Skor direvisi berdasarkan kondisi setelah perbaikan:
+Skor direvisi berdasarkan kondisi setelah perbaikan session 6:
 
-| Kategori | Skor Sebelum | Skor Sesudah | Catatan |
+| Kategori | Skor Session 5 | Skor Session 6 | Catatan |
 |---|---:|---:|---|
 | Arsitektur dasar | 8.5/10 | 8.5/10 | modular, exchange abstraction bagus |
-| Engine indikator/scoring | 7.5/10 | 8.5/10 | risk math fixed, NaN degradation handled |
-| Risk management | 5.5/10 | 8.0/10 | SL floor unit fixed, SELL risk display fixed |
-| Exchange resilience | 6.5/10 | 9.0/10 | contracts fixed, ticker fallback, robust worker |
-| UI/UX | 6.0/10 | 8.5/10 | chart churn fixed, virtualization, copy fixed, a11y |
-| Accessibility | 4.5/10 | 7.5/10 | zoom, focus, keyboard nav, ARIA, tabpanel |
-| Testing | 7.5/10 | 7.5/10 | breadth bagus, integration/regression test gaps remain |
-| Production readiness | 5.5/10 | 8.5/10 | semua P0-P4 fixed, production-ready with test gaps |
-| **Overall** | **6.4/10** | **8.5/10** | production-ready, test gaps tetap perlu ditutup |
+| Engine indikator/scoring | 8.5/10 | 8.5/10 | risk math, NaN degradation tetap solid |
+| Risk management | 8.0/10 | 8.0/10 | SL floor unit fixed, SELL risk display fixed |
+| Exchange resilience | 7.5/10 | 9.0/10 | ticker fallback parity selesai, semua endpoint simetris |
+| UI/UX | 7.5/10 | 9.0/10 | chart viewport reset, PairSelector keyboard browse-vs-commit, persistence UX |
+| Accessibility | 7.5/10 | 7.5/10 | zoom, focus, keyboard nav, ARIA, tabpanel — sudah solid sebelumnya |
+| Testing | 8.0/10 | 9.0/10 | 30 test files, R1/R2/R3 regression tests, E2E CI gate |
+| Production readiness | 7.5/10 | 8.5/10 | semua gap UX/resilience/docs/CI tertutup |
+| **Overall** | **8.1/10** | **8.8/10** | strong beta, semua issue terbuka dari session 5 ditutup |
 
 ## 11. Prioritas Perbaikan Lanjutan
 
-Semua item P0-P4 telah selesai. Yang tersisa adalah **testing gaps**:
+Semua prioritas dari audit session 5 telah selesai:
 
-1. **Hook <-> API contract regression tests** - tambah test memastikan payload route cocok dengan hook consumer
-2. **Risk math regression tests** - tambah sentinel test untuk unit `%` vs decimal pada adaptive SL floor
-3. **Component integration tests** - tambah test untuk WeightLabPanel state binding
-4. **E2E tests** - Playwright atau Cypress untuk user journey utama
-5. **Accessibility interaction tests** - keyboard-nav/focus-trap/ARIA behavior test
+1. ✅ **Perbaiki `PriceChart` viewport reset policy** — reset/fit hanya saat context switch (detected via dataset signature: bar interval + last timestamp direction).
+2. ✅ **Pisahkan navigation vs selection di `PairSelector`** — arrow key hanya memindahkan highlight; commit via `Enter`/click. Dipisahkan ke pure reducer `reducePairNav()`.
+3. ✅ **Lengkapi fallback parity pada `ticker` route** — upstream retry + public CORS proxy path ditambahkan, parity penuh dengan klines/symbols routes.
+4. ✅ **Hapus / ganti guidance `NODE_TLS_REJECT_UNAUTHORIZED=0`** — diganti dengan penjelasan root-cause (`NODE_EXTRA_CA_CERTS`, OS cert update, HTTPS_PROXY).
+5. ✅ **Selesaikan persistence flow `lastExchange` / recent pairs** — read path ditambahkan (mount bootstrap dari localStorage), UI recents chips ditampilkan.
+6. ✅ **Wire `npm run test:e2e` ke CI** — dedicated E2E job di workflow CI, playwright report artifact.
 
 ## 12. Changelog Perbaikan (2026-06-17 Session 2)
 
@@ -345,16 +462,16 @@ Semua item P0-P4 telah selesai. Yang tersisa adalah **testing gaps**:
 |---|---|---|
 | `lib/signal.ts` | ✅ Fixed | Risk math bug diperbaiki |
 | `lib/hooks/useKlines.ts` | ✅ Fixed | Proxy contract match + SWR namespace |
-| `lib/hooks/useTicker.ts` | ✅ Fixed (no change needed) | Route fixed to match hook contract |
+| `lib/hooks/useTicker.ts` | ⚠️ Partially fixed | Contract path benar, tetapi resilience akhir masih bergantung pada route ticker yang belum punya fallback parity |
 | `components/WeightLabPanel.tsx` | ✅ Fixed | Prop-based, not detached |
 | `lib/hooks/useWeightLab.ts` | ✅ Fixed | isOptimized semantic fixed |
 | `components/MultiTimeframeRow.tsx` | ✅ Fixed | Deduped logging + reset on exchange/symbol change |
-| `components/PriceChart.tsx` | ✅ Fixed | No auto-fit on refresh + incremental overlay update |
-| `components/PairSelector.tsx` | ✅ Fixed | Virtual scroll windowing + keyboard nav + ARIA |
+| `components/PriceChart.tsx` | ⚠️ Needs follow-up | No auto-fit on refresh fixed, tetapi viewport stale saat pair/timeframe berubah |
+| `components/PairSelector.tsx` | ⚠️ Needs follow-up | Virtual scroll + ARIA ada, tetapi keyboard arrow masih langsung commit selection |
 | `components/RiskCard.tsx` | ✅ Fixed | SELL risk display correct |
 | `tsconfig.json` | ✅ Fixed | No stale `.next/types` |
-| `README.md` | ✅ Fixed | Multi-exchange, accurate description |
-| `app/page.tsx` | ✅ Fixed | Dynamic exchange label, no unused imports |
+| `README.md` | ⚠️ Needs follow-up | Multi-exchange docs ada, tetapi masih menyarankan disabling TLS verification |
+| `app/page.tsx` | ⚠️ Needs follow-up | Dynamic exchange label fixed, tetapi persistence `lastPairs` / `lastExchange` belum selesai |
 | `app/globals.css` | ✅ Fixed | No focus suppression |
 | `app/layout.tsx` | ✅ Fixed | Mobile zoom enabled |
 | `components/HistoryPanel.tsx` | ✅ Fixed | Export/count/truncation |
@@ -371,7 +488,7 @@ Semua item P0-P4 telah selesai. Yang tersisa adalah **testing gaps**:
 | `app/api/exchanges/[exchange]/symbols/route.ts` | ✅ Fixed | Removed unused `fetchWithTimeout` import |
 | `lib/signalHistory.ts` | ✅ Fixed | Dedupe mechanism |
 | `app/api/exchanges/[exchange]/klines/route.ts` | ✅ Fixed | Consistent payload format |
-| `app/api/exchanges/[exchange]/ticker/route.ts` | ✅ Fixed | Consistent payload format + error handling |
+| `app/api/exchanges/[exchange]/ticker/route.ts` | ⚠️ Partially fixed | Payload shape konsisten, error handling ada, tetapi fallback parity belum diimplementasikan |
 
 ---
 
@@ -379,7 +496,7 @@ Semua item P0-P4 telah selesai. Yang tersisa adalah **testing gaps**:
 
 | Command | Result |
 |---|---|
-| `npm test` | Pass (24 test files) |
+| `npm test` | Pass (28 test files) |
 | `npm run lint` | Pass |
 | `npm run build` | Pass |
 | `npm run typecheck` | Pass |
@@ -397,7 +514,7 @@ Semua item P0-P4 telah selesai. Yang tersisa adalah **testing gaps**:
 | misleading UI copy | ✅ | Dynamic exchange label |
 | accessibility regression | ✅ | Zoom + focus + keyboard nav |
 | performance churn | ✅ | Incremental BB/EMA overlay update, price lines separate effect |
-| missing integration tests | ⬜ | Contract + risk math tests needed |
+| missing integration tests | ✅ | Contract + risk math + a11y tests added |
 
 ### Appendix C - Session 3 Changelog (2026-06-17)
 
@@ -418,3 +535,100 @@ Semua item P0-P4 telah selesai. Yang tersisa adalah **testing gaps**:
 | 22 | Symbols route unused import | `symbols/route.ts` | Removed unused `fetchWithTimeout` import |
 | 23 | PairSelector semantics | `PairSelector.tsx` | Full rewrite with virtual scroll, keyboard nav, `role="listbox"`/`role="option"`, `aria-activedescendant`, `focus-visible` |
 | 24 | Tabs tabpanel linkage | `page.tsx` | Added `role="tabpanel"`, `id`, `aria-labelledby` to each tab content panel |
+
+### Appendix D - Session 4 Changelog (2026-06-18)
+
+### Testing Gaps Closed
+
+| # | Test | File | Coverage |
+|---|---|---|---|
+| T1 | Hook <-> API contract regression | `tests/apiContract.test.ts` | Route payload shape, error shape, SWR key format, direct + proxy + error paths |
+| T2 | Risk math regression (SL floor unit) | `tests/riskMathRegression.test.ts` | ATR% > 1.5 triggers vol-adaptive floor, SL distance within expected bounds, no unit explosion |
+| T3 | Component integration (WeightLab) | `tests/weightLabPanel.test.tsx` | Panel renders correct badge, slider values reflect prop state, baseline -> current mapping |
+| T4 | Accessibility interaction | `tests/a11yInteraction.test.ts` | Tabs `role="tablist"`, TimeframeTabs `role="radiogroup"`, ExchangeSelector `role="radiogroup"`, PairSelector `aria-haspopup/expanded`, tabpanel `id` + `aria-labelledby`, DemoToggle `aria-haspopup=dialog` |
+| T5 | E2E user journey | `tests/e2e/userJourney.spec.ts` | Page load, exchange switch, timeframe switch, pair selector open, demo toggle, tab navigation |
+
+### Runtime Fixes Found by Tests
+
+| File | Issue | Fix |
+|---|---|---|
+| `components/WeightLabPanel.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/Icon.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/Tabs.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/TimeframeTabs.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/ExchangeSelector.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/DemoToggle.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/Tooltip.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+| `components/PairSelector.tsx` | Missing `React` import for classic JSX runtime | Added `import React` |
+
+### Dependencies Added
+
+| Package | Purpose |
+|---|---|
+| `jsdom` | DOM environment for SSR-based component tests |
+| `jsdom-global` | Global DOM setup for test runner |
+| `@playwright/test` | E2E browser automation |
+
+### Appendix E - Session 5 Re-Audit Findings (2026-06-18)
+
+### Validasi Ulang
+
+Perintah audit ulang yang dijalankan:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+Hasil:
+
+- semua pass
+- tidak ditemukan crash build/type/lint
+- issue tersisa ada pada interaction semantics, runtime resilience parity, documentation hygiene, dan CI enforcement
+
+### Temuan Baru / Koreksi Klaim Lama
+
+| # | Area | File(s) | Severity | Ringkasan |
+|---|---|---|---|---|
+| R1 | Chart viewport | `components/PriceChart.tsx` | Medium | `hasFittedRef` tidak reset saat context pair/timeframe berubah, menyebabkan viewport lama bocor ke dataset baru |
+| R2 | PairSelector UX flow | `components/PairSelector.tsx` | Medium | Arrow key di search input langsung commit pair aktif, bukan hanya navigasi highlight |
+| R3 | Ticker resilience | `app/api/exchanges/[exchange]/ticker/route.ts` | High | Route ticker belum punya fallback parity walau dokumen/assessment lama mengklaim ada |
+| R4 | Security docs | `README.md`, `lib/exchanges/fetch.ts` | Low | Docs masih menyarankan `NODE_TLS_REJECT_UNAUTHORIZED=0` |
+| R5 | Persistence flow | `app/page.tsx` | Low | `lastPairs` dan `lastExchange` ditulis tetapi tidak dipakai saat bootstrap |
+| R6 | CI coverage | `.github/workflows/ci.yml`, `tests/e2e/userJourney.spec.ts` | Medium | Playwright E2E ada, tetapi belum dijalankan di CI |
+
+### Implikasi Praktis
+
+- **Untuk user akhir:** beberapa interaksi UI masih bisa terasa aneh atau misleading walau data engine benar.
+- **Untuk maintainer:** assessment lama terlalu optimistis; perlu membedakan antara *contract fixed* vs *production behavior truly hardened*.
+- **Untuk release readiness:** repo aman untuk iterasi lanjutan, tetapi belum ideal jika ingin mengklaim semua UX/resilience/testing gap telah tertutup.
+
+### Appendix F - Session 6 Changelog (2026-06-18)
+
+### Fixes R1–R6 (All Session 5 Open Issues)
+
+| # | Bug | File(s) | Fix |
+|---|---|---|---|
+| R1 | Chart viewport stale on context switch | `components/PriceChart.tsx`, `tests/chartViewport.test.ts` | Dataset signature (`last` + `interval`) tracks context. `isContextSwitch()` detects pair/timeframe change vs live refresh. Viewport reset (fitContent) on context switch only. Pure helpers extracted for unit testing. |
+| R2 | PairSelector keyboard commits on arrow | `components/PairSelector.tsx`, `tests/pairSelectorNav.test.ts` | `reducePairNav()` pure reducer: ArrowUp/Down → move highlight only, Enter → commit. `activeIndex` state decoupled from `value`. `onMouseEnter` syncs highlight on hover. Ring styling for active item. |
+| R3 | Ticker route missing fallback parity | `app/api/exchanges/[exchange]/ticker/route.ts`, `tests/apiContract.test.ts` | Added `buildUpstreamTickerUrl()` (binance/okx/bybit), `parseTickerResponse()`, `tryWithCorsProxy()` — matching klines route pattern. Fallback chain: direct → server-proxy → public-cors-proxy → 502. |
+| R4 | Insecure TLS guidance in docs | `README.md`, `lib/exchanges/fetch.ts` | Replaced `NODE_TLS_REJECT_UNAUTHORIZED=0` with safer troubleshooting: `NODE_EXTRA_CA_CERTS`, OS cert update, `HTTPS_PROXY`. |
+| R5 | Dead persistence flow | `app/page.tsx`, `components/PairSelector.tsx` | Added `LAST_SYMBOL_KEY` + read path on mount (exchange, symbol, recent pairs restored from localStorage). `recents` prop on PairSelector shows "Recent" chips in dropdown. |
+| R6 | E2E not in CI | `.github/workflows/ci.yml`, `README.md` | Added dedicated `e2e` CI job (Node 20, playwright install, artifact upload) as a PR/main gate. |
+
+### New Test Files
+
+| # | Test | File | Coverage |
+|---|---|---|---|
+| T6 | Chart viewport reset policy | `tests/chartViewport.test.ts` | `computeDatasetSig`, `isContextSwitch` — initial load, live refresh, timeframe change, pair change, boundary conditions |
+| T7 | PairSelector keyboard navigation | `tests/pairSelectorNav.test.ts` | `reducePairNav` — arrow browse-only, Enter commit, clamp at bounds, empty list, other keys no-op |
+
+### Appendix F Validation
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | Pass |
+| `npm run lint` | Pass |
+| `npm test` | Pass (30 test files, all green) |
+| `npm run build` | Pass |

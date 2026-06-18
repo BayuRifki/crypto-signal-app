@@ -41,6 +41,47 @@ type OverlaySeries = {
   ema200: ISeriesApi<'Line'> | null;
 };
 
+/**
+ * Dataset signature used to detect a context switch (pair/timeframe change) vs.
+ * a same-context live refresh.
+ *
+ * Strategy: compare the **bar interval** and the **last candle timestamp**.
+ * - Live refresh: the window slides forward by one bar → `last` advances, but
+ *   the interval stays the same and `last` always moves forward.
+ * - Timeframe change: the interval itself changes.
+ * - Pair change: `last` jumps to a completely different range (it may go
+ *   backwards or jump far ahead). We detect this by checking whether the new
+ *   `last` is a forward continuation of the old dataset (within 2× interval).
+ *
+ * Extracted as a pure helper so the context-switch policy can be unit-tested
+ * without a chart instance (regression coverage for assessment R1: the viewport
+ * used to leak from a previous pair/timeframe into a new dataset).
+ */
+export type DatasetSig = { last: number; interval: number };
+
+export const computeDatasetSig = (times: number[]): DatasetSig | null => {
+  if (times.length === 0) return null;
+  const last = times[times.length - 1];
+  const secondToLast = times[times.length - 2];
+  const interval = secondToLast !== undefined && last > secondToLast
+    ? last - secondToLast
+    : times[1] !== undefined && times[1] > times[0]
+      ? times[1] - times[0]
+      : 0;
+  return { last, interval };
+};
+
+export const isContextSwitch = (prev: DatasetSig | null, next: DatasetSig): boolean => {
+  if (prev === null) return true;
+  if (prev.interval !== next.interval) return true;
+  // Same interval: if `last` moved forward by at most a few bars (within 20×
+  // the bar interval), or stayed the same (no new data yet), it's a live
+  // refresh. Anything else (backward jump, huge forward jump) is a context
+  // switch (e.g. user switched pair or timeframe).
+  const gap = next.last - prev.last;
+  return gap < 0 || gap > next.interval * 20;
+};
+
 export default function PriceChart({
   candles,
   fvgs,
@@ -102,15 +143,25 @@ export default function PriceChart({
     [candles]
   );
 
-  const hasFittedRef = useRef(false);
+  // Track the dataset identity to detect context switches (pair/timeframe change)
+  // vs. live refreshes within the same context. A live refresh slides the window
+  // by a few bars at most; a context switch swaps in a completely different range.
+  // The signature is derived from the bar spacing of the first candle, which is
+  // stable for the same interval but changes when the interval or pair changes.
+  const datasetSigRef = useRef<DatasetSig | null>(null);
 
   useEffect(() => {
     if (!candleSeriesRef.current || candleData.length === 0) return;
     candleSeriesRef.current.setData(candleData);
-    if (!hasFittedRef.current) {
+
+    const nextSig = computeDatasetSig(candleData.map((c) => c.time as number));
+    if (nextSig && isContextSwitch(datasetSigRef.current, nextSig)) {
+      // New pair/timeframe (or initial load): reset the viewport to fit the new
+      // dataset so the user is not left looking at a stale zoom/pan position.
       chartRef.current?.timeScale().fitContent();
-      hasFittedRef.current = true;
+      datasetSigRef.current = nextSig;
     }
+    // Same context live refresh: preserve the user's viewport.
   }, [candleData]);
 
   const bbData = useMemo(() => (showBB ? bollinger(candles, 20, 2) : null), [candles, showBB]);

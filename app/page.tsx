@@ -30,7 +30,11 @@ import WeightLabPanel from '../components/WeightLabPanel';
 
 const LAST_PAIRS_KEY = 'cs:lastPairs';
 const LAST_EXCHANGE_KEY = 'cs:lastExchange';
+const LAST_SYMBOL_KEY = 'cs:lastSymbol';
 const DEFAULT_PAIRS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
+
+const isExchangeId = (v: unknown): v is ExchangeId =>
+  v === 'binance' || v === 'okx' || v === 'bybit';
 
 export default function HomePage() {
   const [exchange, setExchange] = useState<ExchangeId>('okx');
@@ -46,6 +50,28 @@ export default function HomePage() {
   const [signalDrawerOpen, setSignalDrawerOpen] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [bottomTab, setBottomTab] = useState<'structure' | 'backtest' | 'weightlab' | 'history'>('structure');
+
+  // Restore persisted user preferences on mount. We read in an effect (rather than
+  // a lazy useState initializer) so the first client render matches the server-
+  // rendered HTML and we avoid a hydration mismatch; the state updates right
+  // after hydration. Previously these keys were written but never read, leaving
+  // the app to always start from the okx/BTCUSDT defaults regardless of history.
+  const [recentPairs, setRecentPairs] = useState<string[]>(DEFAULT_PAIRS);
+  useEffect(() => {
+    try {
+      const exRaw = localStorage.getItem(LAST_EXCHANGE_KEY);
+      if (exRaw && isExchangeId(exRaw)) setExchange(exRaw);
+      const symRaw = localStorage.getItem(LAST_SYMBOL_KEY);
+      if (symRaw && typeof symRaw === 'string' && symRaw.trim()) setSymbol(symRaw);
+      const pairsRaw = localStorage.getItem(LAST_PAIRS_KEY);
+      const pairsParsed = pairsRaw ? JSON.parse(pairsRaw) : null;
+      if (Array.isArray(pairsParsed) && pairsParsed.every((p) => typeof p === 'string')) {
+        setRecentPairs(pairsParsed);
+      }
+    } catch {}
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { candles, isLoading: klinesLoading, refresh: refreshKlines, error: klinesError, isDemo, demoPreset, setDemoPreset, setDemoMode, realError } = useCandleSource(exchange, symbol, interval, 500);
   const { ticker, refresh: refreshTicker } = useTicker(exchange, symbol);
@@ -65,9 +91,12 @@ export default function HomePage() {
     try {
       const raw = localStorage.getItem(LAST_PAIRS_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
-      const arr: string[] = Array.isArray(parsed) ? parsed : DEFAULT_PAIRS;
-      const next = [symbol, ...arr.filter((s) => s !== symbol)].slice(0, 6);
+      const prev: string[] = Array.isArray(parsed) ? parsed : DEFAULT_PAIRS;
+      const next = [symbol, ...prev.filter((s) => s !== symbol)].slice(0, 6);
       localStorage.setItem(LAST_PAIRS_KEY, JSON.stringify(next));
+      setRecentPairs(next);
+      // Persist the last-selected symbol so it can be restored on next load.
+      localStorage.setItem(LAST_SYMBOL_KEY, symbol);
     } catch {}
   }, [symbol]);
 
@@ -104,6 +133,7 @@ export default function HomePage() {
             lastPrice={ticker?.lastPrice ?? signal?.price ?? null}
             change24h={ticker?.priceChangePercent ?? null}
             exchange={exchange}
+            recents={recentPairs}
           />
           <TimeframeTabs value={interval} onChange={setInterval} />
           <div className="flex-1" />

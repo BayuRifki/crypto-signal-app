@@ -93,7 +93,7 @@ npm run build && npm run start
 | `npm run start` | Start production server |
 | `npm run lint` | ESLint (`next/core-web-vitals`) |
 | `npm run typecheck` | `tsc --noEmit` type check |
-| `npm test` | Run all 16 test files via `tsx` |
+| `npm test` | Run all 30 test files via `tsx` |
 
 ## Structure
 
@@ -108,7 +108,7 @@ lib/
   ├── utils.ts        # Math helpers (sma, ema, stdev, fmt, fmtPrice)
   ├── hooks/          # SWR hooks: useKlines, useTicker, useSymbols, useSignal, useBacktest
   └── indicators/     # 15 indicator modules
-tests/                # 16 test files (1 per indicator + scoring + backtest)
+tests/                # 30 test files (1 per indicator + scoring + backtest + contracts + a11y + regression)
 public/               # manifest + icon
 .github/workflows/    # CI (typecheck → lint → test → build, Node 18 & 20)
 ```
@@ -130,16 +130,16 @@ npm test
 
 ## CI
 
-`.github/workflows/ci.yml` runs on push/PR to `main`: `npm ci → typecheck → lint → test → build`, matrix Node 18 & 20 on `ubuntu-latest`.
+`.github/workflows/ci.yml` runs on push/PR to `main`. The `build` job runs `npm ci → typecheck → lint → test → build` on a matrix of Node 18 & 20 (`ubuntu-latest`). A separate `e2e` job runs the Playwright user-journey suite (`npm run test:e2e`) on Node 20 as a gate for the main UI flow.
 
 ## Networking
 
 Direct browser → exchange fetches and server-side exchange fetches. If you are behind a corporate proxy, firewall, or in a geo-blocked region for an exchange:
 
-- **TLS verification off (dev only):** `NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev` — bypasses Node.js CA cert checks. Some Windows installs / stripped Node images lack the cert chain for `api.binance.com` etc.
+- **TLS / certificate errors:** if a fetch fails with a TLS/cert error, the cause is usually a missing CA chain on your Node.js install (common on stripped Windows images or corporate TLS-intercepting proxies). Do **not** disable certificate verification globally (avoid `NODE_TLS_REJECT_UNAUTHORIZED=0` — it turns off TLS checks for the entire process and masks the real issue). Instead, point Node at the missing cert: `NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem`, or update the OS/Node root certificates. You can also route through a local/corporate forward proxy via `HTTPS_PROXY`.
 - **Demo data mode:** Click the `LIVE/DEMO` button in the top-right to switch to synthetic candles (4 presets: Trending, Ranging, Volatile, Bear). Useful for exploring the UI when no exchange is reachable.
 - **Multi-exchange fallback:** Switch between Binance / OKX / Bybit via the selector. Each exchange's symbol/kline endpoint is different — see `lib/exchanges/`.
-- **Proxy routes:** `/api/exchanges/{binance,okx,bybit}/{klines,ticker,symbols}` are server-side and try public CORS proxies as last resort. Disable via `DISABLE_CORS_PROXY=1`.
+- **Proxy routes:** `/api/exchanges/{binance,okx,bybit}/{klines,ticker,symbols}` are server-side. The `klines`, `ticker`, and `symbols` routes all retry the raw upstream URL and then try public CORS proxies as a last resort before returning `502`. Disable the CORS-proxy tier via `DISABLE_CORS_PROXY=1`.
 
 ## PWA
 

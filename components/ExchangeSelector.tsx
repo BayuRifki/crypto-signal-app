@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 import type { ExchangeId } from '../lib/exchanges/types';
 
 const EXCHANGES: { id: ExchangeId; label: string; sub: string }[] = [

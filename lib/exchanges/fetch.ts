@@ -3,13 +3,21 @@ const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 export const DEFAULT_TIMEOUT_MS = 8000;
 
 /**
- * If your Node.js install is missing the CA cert chain for some exchange APIs
- * (common on stripped Windows installs / corporate proxies), set
- * `NODE_TLS_REJECT_UNAUTHORIZED=0` in your environment before starting the
- * dev server. This is a Node-native flag — no extra dependency needed.
+ * If exchange API fetches fail with a TLS/certificate error, the root cause is
+ * almost always a missing CA certificate chain on this Node.js install — common
+ * on stripped Windows images or behind a corporate proxy that intercepts TLS.
  *
- *   Windows:    set NODE_TLS_REJECT_UNAUTHORIZED=0 && npm run dev
- *   Linux/Mac:  NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev
+ * Do NOT use `NODE_TLS_REJECT_UNAUTHORIZED=0`. It globally disables certificate
+ * verification for the entire process (not just one request), which is unsafe,
+ * easy to leave on, and masks the real problem.
+ *
+ * Safer fixes, in order of preference:
+ *   1. Set `NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem` to extend the
+ *      trust store with only the missing certificate.
+ *   2. Update Node.js / the OS root certificates (`npm install -g node` /
+ *      `update-ca-certificates`) so the public chain is present.
+ *   3. Run behind a local/corporate forward proxy that terminates TLS itself,
+ *      pointing `HTTPS_PROXY` at it.
  */
 export const fetchWithTimeout = async (url: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> => {
   const ctl = new AbortController();

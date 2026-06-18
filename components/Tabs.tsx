@@ -1,5 +1,5 @@
 'use client';
-import { useState, type ReactNode, useEffect, useRef } from 'react';
+import React, { useState, type ReactNode, useEffect, useRef } from 'react';
 
 export type Tab = { id: string; label: string; icon?: ReactNode; badge?: ReactNode; count?: number };
 

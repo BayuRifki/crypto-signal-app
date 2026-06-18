@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSymbols } from '../lib/hooks/useSymbols';
 import { POPULAR_USDT_PAIRS, POPULAR_TRENDING } from '../lib/popularPairs';
 import type { ExchangeId, SymbolInfo } from '../lib/exchanges/types';
@@ -12,6 +12,8 @@ type Props = {
   lastPrice?: number | null;
   change24h?: number | null;
   exchange: ExchangeId;
+  /** Recently-used pairs, persisted across sessions. Shown as quick-access chips. */
+  recents?: string[];
 };
 
 const dedupe = (pairs: SymbolInfo[]): SymbolInfo[] => {
@@ -28,11 +30,47 @@ const dedupe = (pairs: SymbolInfo[]): SymbolInfo[] => {
 const ITEM_HEIGHT = 44;
 const VISIBLE_COUNT = 8;
 
-export default function PairSelector({ value, onChange, lastPrice, change24h, exchange }: Props) {
+/**
+ * Pure keyboard-navigation reducer for the pair selector.
+ *
+ * ArrowUp/ArrowDown only move the highlight (browse) — they must NOT commit a
+ * selection, otherwise every keystroke swaps the active pair and triggers a
+ * refetch + recompute. Enter commits the highlighted option. This was a real
+ * regression (assessment R2): the old handler called `onChange` on every arrow
+ * press. Extracted as a pure function so the browse-vs-commit semantics can be
+ * unit-tested without DOM interaction.
+ */
+export type PairNavAction = { type: 'move'; nextIndex: number } | { type: 'commit'; index: number } | { type: 'none' };
+
+export const reducePairNav = (
+  key: string,
+  activeIndex: number,
+  listLength: number
+): PairNavAction => {
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    if (listLength === 0) return { type: 'none' };
+    const dir = key === 'ArrowDown' ? 1 : -1;
+    const base = activeIndex >= 0 && activeIndex < listLength ? activeIndex : 0;
+    const nextIndex = Math.max(0, Math.min(listLength - 1, base + dir));
+    return { type: 'move', nextIndex };
+  }
+  if (key === 'Enter') {
+    if (listLength === 0) return { type: 'none' };
+    const index = activeIndex >= 0 && activeIndex < listLength ? activeIndex : 0;
+    return { type: 'commit', index };
+  }
+  return { type: 'none' };
+};
+
+export default function PairSelector({ value, onChange, lastPrice, change24h, exchange, recents }: Props) {
   const { symbols, isLoading, error, refresh } = useSymbols(exchange);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
+  // Highlight index for keyboard navigation. Decoupled from `value` (the committed
+  // pair) so arrow keys browse without committing a selection — commit happens on
+  // Enter or click, matching combobox/listbox conventions.
+  const [activeIndex, setActiveIndex] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,25 +134,43 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
     setQuery('');
   }, [onChange]);
 
+  // Keep the highlight in sync: when the dropdown opens, the filter changes, or
+  // the committed value changes, anchor the highlight on the active pair (or 0).
+  useEffect(() => {
+    if (!open) return;
+    const idx = filtered.findIndex((s) => s.symbol === value);
+    setActiveIndex(idx >= 0 ? idx : 0);
+  }, [open, query, value, filtered]);
+
+  const ensureVisible = useCallback((index: number) => {
+    if (!scrollRef.current) return;
+    const itemTop = index * ITEM_HEIGHT;
+    const viewTop = scrollRef.current.scrollTop;
+    const viewBottom = viewTop + scrollRef.current.clientHeight;
+    if (itemTop < viewTop) {
+      scrollRef.current.scrollTop = itemTop;
+    } else if (itemTop + ITEM_HEIGHT > viewBottom) {
+      scrollRef.current.scrollTop = itemTop + ITEM_HEIGHT - scrollRef.current.clientHeight;
+    }
+  }, []);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const action = reducePairNav(e.key, activeIndex, filtered.length);
+    if (action.type === 'move') {
+      // Navigate the highlight only — do NOT commit. This prevents every arrow
+      // press from swapping the active pair (and triggering a refetch + recompute).
       e.preventDefault();
-      const currentIndex = filtered.findIndex((s) => s.symbol === value);
-      const dir = e.key === 'ArrowDown' ? 1 : -1;
-      const nextIndex = Math.max(0, Math.min(filtered.length - 1, currentIndex + dir));
-      if (filtered[nextIndex]) {
-        onChange(filtered[nextIndex].symbol);
-        const itemTop = nextIndex * ITEM_HEIGHT;
-        if (scrollRef.current) {
-          if (itemTop < scrollRef.current.scrollTop) {
-            scrollRef.current.scrollTop = itemTop;
-          } else if (itemTop + ITEM_HEIGHT > scrollRef.current.scrollTop + scrollRef.current.clientHeight) {
-            scrollRef.current.scrollTop = itemTop + ITEM_HEIGHT - scrollRef.current.clientHeight;
-          }
-        }
+      setActiveIndex(action.nextIndex);
+      ensureVisible(action.nextIndex);
+    } else if (action.type === 'commit') {
+      // Commit the highlighted option (or the single result) on Enter.
+      const target = filtered[action.index];
+      if (target) {
+        e.preventDefault();
+        handleSelect(target.symbol);
       }
     }
-  }, [filtered, value, onChange]);
+  }, [filtered, activeIndex, ensureVisible, handleSelect]);
 
   return (
     <div ref={wrapRef} className="relative">
@@ -148,7 +204,9 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
         <div
           role="listbox"
           aria-label="Trading pairs"
-          aria-activedescendant={value ? `pair-${value}` : undefined}
+          aria-activedescendant={
+            activeIndex >= 0 && filtered[activeIndex] ? `pair-${filtered[activeIndex].symbol}` : undefined
+          }
           className="absolute z-dropdown top-full left-0 mt-2 w-[min(320px,calc(100vw-1.5rem))] card shadow-elev animate-fade-in"
         >
           <div className="p-2 border-b border-line">
@@ -165,6 +223,25 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
               />
             </div>
           </div>
+
+          {!query && recents && recents.length > 0 && (
+            <div className="p-2 border-b border-line">
+              <div className="text-2xs font-semibold text-fg-dim uppercase tracking-wider px-2 py-1">Recent</div>
+              <div className="flex flex-wrap gap-1 px-1">
+                {recents.slice(0, 6).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSelect(s)}
+                    className={`h-7 px-2 text-2xs font-mono rounded bg-bg-panel hover:bg-bg-hover text-fg-muted hover:text-fg transition cursor-pointer ${
+                      s === value ? 'ring-1 ring-inset ring-info/50 text-fg' : ''
+                    }`}
+                  >
+                    {s.replace('USDT', '')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {!query && (
             <div className="p-2 border-b border-line">
@@ -223,18 +300,21 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
             )}
             <div style={{ height: totalHeight, position: 'relative' }}>
               <div style={{ transform: `translateY(${offsetY}px)` }}>
-                {visibleItems.map((s) => {
+                {visibleItems.map((s, i) => {
+                  const globalIndex = startIndex + i;
                   const selected = s.symbol === value;
+                  const active = globalIndex === activeIndex;
                   return (
                     <button
                       key={s.symbol}
                       id={`pair-${s.symbol}`}
                       role="option"
                       aria-selected={selected}
+                      onMouseEnter={() => setActiveIndex(globalIndex)}
                       onClick={() => handleSelect(s.symbol)}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-bg-panel transition cursor-pointer flex items-center justify-between gap-2 ${
-                        selected ? 'bg-info/10' : ''
-                      }`}
+                      className={`w-full text-left px-3 py-2 text-sm transition cursor-pointer flex items-center justify-between gap-2 ${
+                        selected ? 'bg-info/10' : active ? 'bg-bg-panel' : ''
+                      }${active ? ' ring-1 ring-inset ring-info/40' : ''}`}
                       style={{ height: ITEM_HEIGHT }}
                     >
                       <div className="flex items-center gap-2 min-w-0">

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useId, type ReactNode, type KeyboardEvent, type FocusEvent } from 'react';
+import React, { useState, useId, type ReactNode, type KeyboardEvent, type FocusEvent } from 'react';
 
 type Props = {
   label: ReactNode;

@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 import type { Interval } from '../lib/exchanges/types';
 
 const TFS: { value: Interval; label: string; sub: string }[] = [
