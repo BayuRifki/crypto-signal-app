@@ -26,13 +26,13 @@ export default function RiskCard({ signal }: Props) {
   return (
     <div className="card p-5">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-2xs text-fg-dim uppercase tracking-wider font-bold">
+        <div className="flex items-center gap-2 text-2xs text-fg-dim label-caps">
           <Icon.Shield size={12} />
           <span>Risk Plan</span>
         </div>
         <div className="flex items-baseline gap-1">
-          <span className="text-2xs text-fg-dim">R:R</span>
-          <span className={`text-sm font-bold tabular ${rrWarn ? 'text-warn' : 'text-fg'}`}>1:{signal.risk.rr.toFixed(2)}</span>
+          <span className="text-2xs text-fg-dim label-caps">R:R</span>
+          <span className={`text-sm mono font-bold ${rrWarn ? 'text-warn' : 'text-fg'}`}>1:{signal.risk.rr.toFixed(2)}</span>
         </div>
       </div>
 
@@ -42,13 +42,13 @@ export default function RiskCard({ signal }: Props) {
           label={isLong || isShort ? 'Stop Loss' : 'Ref SL'}
           value={fmtPrice(signal.risk.stopLoss)}
           sub={`${distToSL >= 0 ? '+' : ''}${distToSL.toFixed(2)}% · ${slSourceLabel}`}
-          accent="text-sell"
+          accent="text-warn"
         />
         <Row
           label={isLong || isShort ? 'Take Profit' : 'Ref TP'}
           value={fmtPrice(signal.risk.takeProfit)}
           sub={`${distToTP >= 0 ? '+' : ''}${distToTP.toFixed(2)}% · ${tpSourceLabel}`}
-          accent="text-buy"
+          accent="text-info"
         />
         <Row
           label="Risk per unit"
@@ -80,10 +80,10 @@ export default function RiskCard({ signal }: Props) {
 
 const Row = ({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) => (
   <div className="flex items-center justify-between">
-    <span className="text-2xs text-fg-dim">{label}</span>
+    <span className="text-2xs text-fg-dim label-caps">{label}</span>
     <div className="flex items-baseline gap-2">
-      <span className={`text-sm font-bold tabular ${accent}`}>{value}</span>
-      {sub && <span className="text-2xs text-fg-dim tabular">{sub}</span>}
+      <span className={`text-sm mono font-bold ${accent}`}>{value}</span>
+      {sub && <span className="text-2xs text-fg-dim mono tabular">{sub}</span>}
     </div>
   </div>
 );

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "fermentId": "019efd0d-ef8e-7610-96cb-24e1c64aa0f5",
+  "phaseId": "phase-1",
+  "phaseName": "Theme Foundation",
+  "attempt": 1,
+  "timestamp": "2026-06-25T04:57:00.275Z",
+  "goal": "Mengganti palet Aurora Terminal menjadi tema gelap netral profesional dan memperbarui design tokens global.",
+  "summary": "Phase 1 completed: theme tokens in `tailwind.config.ts`, `app/globals.css`, and `DESIGN.md` have been migrated from Aurora cyan/magenta to a neutral professional dark palette. Signal green/red are reserved for BUY/SELL. Typecheck and lint pass.",
+  "stepSummaries": "  1. Update color/shadow tokens in `tailwind.config.ts` to neutral dark palette; keep `buy`/`sell` as signal green/red, add/rename accent/info/warn tokens; remove or rename `aurora` shadow. [verified]\n  2. Update CSS variables, `.btn-primary`, `.btn-danger`, badges, glow, shimmer, focus/selection, and body gradient in `app/globals.css` to neutral palette. [verified]\n  3. Update `DESIGN.md` color spec and directional-color rule to reflect neutral theme. [verified]\n  4. Run typecheck and lint to ensure token changes compile. [verified]",
+  "diffAvailable": true,
+  "diffFilesChanged": " app/api/exchanges/[exchange]/klines/route.ts |    2 +-\n app/api/exchanges/[exchange]/ticker/route.ts |    2 +-\n app/globals.css                              |  159 +++-\n app/layout.tsx                               |   12 +-\n app/page.tsx                                 |  550 ++++++------\n components/BacktestPanel.tsx                 |  746 ++++++++--------\n components/Header.tsx                        |  122 +--\n components/HistoryPanel.tsx                  |  445 +++++-----\n components/IndicatorPanel.tsx                |    7 +\n components/IndicatorSettings.tsx             |   17 +-\n components/KPIStrip.tsx                      |    4 +-\n components/MobileSignalButton.tsx            |   12 +-\n components/MultiTimeframeRow.tsx             |  249 +++---\n components/PairSelector.tsx                  |  689 +++++++--------\n components/PriceChart.tsx                    |  607 ++++++-------\n components/RiskCard.tsx                      |   12 +-\n components/SignalCard.tsx                    |   85 +-\n components/StructurePanel.tsx                |    8 +-\n components/TimeframeTabs.tsx                 |    7 +-\n components/Tooltip.tsx                       |    2 +-\n[... 15 more files ...]\n 34 files changed, 3210 insertions(+), 2816 deletions(-)",
+  "flags": [
+    {
+      "problem": "Project test command (`npm test`) did not validate.",
+      "evidence": "test script does not reference a known runner (vitest, jest, mocha, ava, tap, node --test, playwright test, bun test); got: tsx tests/adx.test.ts && tsx tests/d",
+      "severity": "block",
+      "redirect": "Wire test properly before completing this phase — make `npm test` a real, installable command (resolve the runner, fix the script)."
+    },
+    {
+      "problem": "Project lint command (`npm run lint`) did not validate.",
+      "evidence": "lint script does not reference a known runner (biome, eslint, tsc, oxlint); got: next lint",
+      "severity": "block",
+      "redirect": "Wire lint properly before completing this phase — make `npm run lint` a real, installable command (resolve the runner, fix the script)."
+    }
+  ],
+  "derivedGrade": "F",
+  "reviewerRationale": "2 block flag(s) raised — see attached gate verdicts and project checks.",
+  "gateVerdicts": [
+    {
+      "id": "F1",
+      "verdict": "pass",
+      "rationale": "Steps 1-3 used targeted grep (proxy) to confirm removal of old colors, which is appropriate for static config edits. Step 4 ran real `tsc --noEmit` and ESLint (syntactic), covering the changed artifacts. No step relied solely on proxy/sentinel.",
+      "evidence": "tailwind.config.ts grep found only rename comment; globals.css grep returned 0 matches; DESIGN.md grep returned 0 matches; `npm run typecheck` and `npm run lint` exited 0."
+    },
+    {
+      "id": "F2",
+      "verdict": "pass",
+      "rationale": "The phase goal was to replace the Aurora palette with a neutral terminal dark theme; the three files that define the design system now use the new palette and pass typecheck/lint.",
+      "evidence": "Updated `tailwind.config.ts` colors, `app/globals.css` primitives, and `DESIGN.md` spec; verification commands pass."
+    },
+    {
+      "id": "F3",
+      "verdict": "pass",
+      "rationale": "Nothing deferred in this phase. Non-signal usages of `buy`/`sell` in components will be addressed in Phase 2 as planned.",
+      "evidence": "Phase 2 step list explicitly covers decoupling non-signal color usage across components."
+    }
+  ],
+  "projectChecks": {
+    "discovered": true,
+    "anyFailed": true,
+    "commands": [
+      {
+        "kind": "test",
+        "command": "npm test",
+        "exitCode": 1,
+        "durationMs": 0,
+        "timedOut": false
+      },
+      {
+        "kind": "lint",
+        "command": "npm run lint",
+        "exitCode": 1,
+        "durationMs": 0,
+        "timedOut": false
+      },
+      {
+        "kind": "typecheck",
+        "command": "npm run typecheck",
+        "exitCode": 0,
+        "durationMs": 6,
+        "timedOut": false
+      }
+    ]
+  }
+}

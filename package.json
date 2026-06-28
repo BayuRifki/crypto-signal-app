@@ -6,9 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/adx.test.ts && tsx tests/divergence.test.ts && tsx tests/rsi.test.ts && tsx tests/macd.test.ts && tsx tests/bollinger.test.ts && tsx tests/ema.test.ts && tsx tests/fvg.test.ts && tsx tests/orderBlock.test.ts && tsx tests/marketStructure.test.ts && tsx tests/liquiditySweep.test.ts && tsx tests/volume.test.ts && tsx tests/supportResistance.test.ts && tsx tests/volumeProfile.test.ts && tsx tests/atr.test.ts && tsx tests/scoring.test.ts && tsx tests/backtest.test.ts && tsx tests/exchanges.test.ts && tsx tests/apiContract.test.ts && tsx tests/riskMathRegression.test.ts && tsx tests/a11yInteraction.test.ts && tsx tests/weightOptimizer.test.ts && tsx tests/weightLabHook.test.ts && tsx tests/weightLabPanel.test.tsx && tsx tests/popularPairs.test.ts && tsx tests/demoData.test.ts && tsx tests/fallback.test.ts && tsx tests/gracefulDegradation.test.ts && tsx tests/webWorker.test.ts && tsx tests/chartViewport.test.ts && tsx tests/pairSelectorNav.test.ts",
+    "test": "node --test --import tsx tests/run.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

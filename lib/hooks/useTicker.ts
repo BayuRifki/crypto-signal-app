@@ -23,11 +23,13 @@ const fetcher = async (key: string): Promise<FallbackResult<Ticker24h>> => {
   const [, exchange, symbol] = key.split('|') as [string, ExchangeId, string];
   try {
     return await fetchDirect(exchange, symbol);
-  } catch (e) {
+  } catch (directErr) {
+    if (typeof console !== 'undefined') console.warn('[useTicker] direct failed:', directErr);
     try {
       return await fetchProxy(exchange, symbol);
-    } catch {
-      throw e;
+    } catch (proxyErr) {
+      if (typeof console !== 'undefined') console.error('[useTicker] proxy also failed:', proxyErr);
+      throw proxyErr;
     }
   }
 };

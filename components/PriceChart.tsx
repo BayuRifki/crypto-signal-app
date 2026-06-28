@@ -20,6 +20,8 @@ import type { MSSignal } from '../lib/indicators/marketStructure';
 import { Icon } from './Icon';
 
 type Props = {
+  symbol: string;
+  intervalLabel: string;
   candles: Candle[];
   fvgs: FVG[];
   orderBlocks: OrderBlock[];
@@ -58,6 +60,7 @@ type OverlaySeries = {
  * used to leak from a previous pair/timeframe into a new dataset).
  */
 export type DatasetSig = { last: number; interval: number };
+export type ChartContextSig = DatasetSig & { symbol: string; intervalLabel: string };
 
 export const computeDatasetSig = (times: number[]): DatasetSig | null => {
   if (times.length === 0) return null;
@@ -71,8 +74,10 @@ export const computeDatasetSig = (times: number[]): DatasetSig | null => {
   return { last, interval };
 };
 
-export const isContextSwitch = (prev: DatasetSig | null, next: DatasetSig): boolean => {
+export const isContextSwitch = (prev: ChartContextSig | null, next: ChartContextSig): boolean => {
   if (prev === null) return true;
+  if (prev.symbol !== next.symbol) return true;
+  if (prev.intervalLabel !== next.intervalLabel) return true;
   if (prev.interval !== next.interval) return true;
   // Same interval: if `last` moved forward by at most a few bars (within 20×
   // the bar interval), or stayed the same (no new data yet), it's a live
@@ -83,6 +88,8 @@ export const isContextSwitch = (prev: DatasetSig | null, next: DatasetSig): bool
 };
 
 export default function PriceChart({
+  symbol,
+  intervalLabel,
   candles,
   fvgs,
   orderBlocks,
@@ -148,21 +155,31 @@ export default function PriceChart({
   // by a few bars at most; a context switch swaps in a completely different range.
   // The signature is derived from the bar spacing of the first candle, which is
   // stable for the same interval but changes when the interval or pair changes.
-  const datasetSigRef = useRef<DatasetSig | null>(null);
+  const datasetSigRef = useRef<ChartContextSig | null>(null);
 
   useEffect(() => {
     if (!candleSeriesRef.current || candleData.length === 0) return;
     candleSeriesRef.current.setData(candleData);
 
-    const nextSig = computeDatasetSig(candleData.map((c) => c.time as number));
-    if (nextSig && isContextSwitch(datasetSigRef.current, nextSig)) {
+    const prevSymbol = datasetSigRef.current?.symbol;
+    const prevInterval = datasetSigRef.current?.intervalLabel;
+    const nextBaseSig = computeDatasetSig(candleData.map((c) => c.time as number));
+    const nextSig = nextBaseSig
+      ? { ...nextBaseSig, symbol, intervalLabel }
+      : null;
+    if (
+      nextSig &&
+      (prevSymbol !== symbol ||
+        prevInterval !== intervalLabel ||
+        isContextSwitch(datasetSigRef.current, nextSig))
+    ) {
       // New pair/timeframe (or initial load): reset the viewport to fit the new
       // dataset so the user is not left looking at a stale zoom/pan position.
       chartRef.current?.timeScale().fitContent();
       datasetSigRef.current = nextSig;
     }
     // Same context live refresh: preserve the user's viewport.
-  }, [candleData]);
+  }, [candleData, symbol, intervalLabel]);
 
   const bbData = useMemo(() => (showBB ? bollinger(candles, 20, 2) : null), [candles, showBB]);
   const emaData = useMemo(() => {
@@ -176,7 +193,7 @@ export default function PriceChart({
     return msSignals.slice(-20).map((m) => ({
       time: m.time as Time,
       position: m.direction === 'bullish' ? 'belowBar' : 'aboveBar',
-      color: m.direction === 'bullish' ? '#10b981' : '#ef4444',
+      color: m.direction === 'bullish' ? 'var(--color-info)' : 'var(--color-warn)',
       shape: m.type === 'BOS' ? 'arrowUp' : 'circle',
       text: m.type,
     }));
@@ -196,12 +213,15 @@ export default function PriceChart({
     if (showBB && bbData) {
       if (!ov.bbMid) {
         ov.bbMid = chart.addLineSeries(lineOpts('#475569'));
-        ov.bbUp = chart.addLineSeries(lineOpts('#0ea5e9'));
-        ov.bbLo = chart.addLineSeries(lineOpts('#0ea5e9'));
+        ov.bbUp = chart.addLineSeries(lineOpts('var(--color-info)'));
+        ov.bbLo = chart.addLineSeries(lineOpts('var(--color-info)'));
       }
-      ov.bbMid.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.middle ?? NaN })));
-      if (ov.bbUp) ov.bbUp.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.upper ?? NaN })));
-      if (ov.bbLo) ov.bbLo.setData(bbData.map((b, i) => ({ time: candles[i].time as Time, value: b.lower ?? NaN })));
+      const bbMidData = bbData.map((b, i) => ({ time: candles[i]?.time as Time, value: b.middle ?? NaN })).filter(d => d.time !== undefined);
+      const bbUpData = bbData.map((b, i) => ({ time: candles[i]?.time as Time, value: b.upper ?? NaN })).filter(d => d.time !== undefined);
+      const bbLoData = bbData.map((b, i) => ({ time: candles[i]?.time as Time, value: b.lower ?? NaN })).filter(d => d.time !== undefined);
+      ov.bbMid.setData(bbMidData);
+      if (ov.bbUp) ov.bbUp.setData(bbUpData);
+      if (ov.bbLo) ov.bbLo.setData(bbLoData);
     } else if (ov.bbMid) {
       try { chart.removeSeries(ov.bbMid); } catch {}
       if (ov.bbUp) try { chart.removeSeries(ov.bbUp); } catch {}
@@ -211,11 +231,13 @@ export default function PriceChart({
 
     if (showEMA && emaData) {
       if (!ov.ema50) {
-        ov.ema50 = chart.addLineSeries(lineOpts('#f59e0b'));
-        ov.ema200 = chart.addLineSeries(lineOpts('#8b5cf6'));
+        ov.ema50 = chart.addLineSeries(lineOpts('var(--color-warn)'));
+        ov.ema200 = chart.addLineSeries(lineOpts('var(--color-accent)'));
       }
-      ov.ema50.setData(emaData.e50.map((v, i) => ({ time: candles[i].time as Time, value: v ?? NaN })));
-      if (ov.ema200) ov.ema200.setData(emaData.e200.map((v, i) => ({ time: candles[i].time as Time, value: v ?? NaN })));
+      const ema50Data = emaData.e50.map((v, i) => ({ time: candles[i]?.time as Time, value: v ?? NaN })).filter(d => d.time !== undefined);
+      const ema200Data = emaData.e200.map((v, i) => ({ time: candles[i]?.time as Time, value: v ?? NaN })).filter(d => d.time !== undefined);
+      ov.ema50.setData(ema50Data);
+      if (ov.ema200) ov.ema200.setData(ema200Data);
     } else if (ov.ema50) {
       try { chart.removeSeries(ov.ema50); } catch {}
       if (ov.ema200) try { chart.removeSeries(ov.ema200); } catch {}
@@ -257,7 +279,7 @@ export default function PriceChart({
 
     if (showSR) {
       for (const lvl of srLevels) {
-        const color = lvl.type === 'support' ? '#22d3ee' : '#f472b6';
+        const color = lvl.type === 'support' ? 'var(--color-info)' : 'var(--color-accent)';
         priceLinesRef.current.push(addLine(lvl.price, color, LineStyle.LargeDashed, lvl.type[0].toUpperCase()));
       }
     }
@@ -278,7 +300,9 @@ export default function PriceChart({
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
-      <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+      {/* Zoom controls live at bottom-right so they don't overlap the crosshair
+          label, time-axis labels, or the price scale at the top of the chart. */}
+      <div className="absolute bottom-2 right-12 flex flex-col gap-1 z-10">
         <button onClick={() => handleZoom(1)} className="w-9 h-9 rounded bg-bg-elevated/90 border border-line hover:border-line-strong text-fg-muted hover:text-fg hover:bg-bg-panel flex items-center justify-center backdrop-blur transition cursor-pointer" aria-label="Zoom in" title="Zoom in">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
         </button>

@@ -2,7 +2,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import Header from '../components/Header';
 import PairSelector from '../components/PairSelector';
-import TimeframeTabs from '../components/TimeframeTabs';
 import PriceChart from '../components/PriceChart';
 import SignalCard from '../components/SignalCard';
 import RiskCard from '../components/RiskCard';
@@ -15,68 +14,38 @@ import Drawer from '../components/Drawer';
 import MobileSignalButton from '../components/MobileSignalButton';
 import BacktestPanel from '../components/BacktestPanel';
 import HistoryPanel from '../components/HistoryPanel';
-import Tabs from '../components/Tabs';
+import WeightLabPanel from '../components/WeightLabPanel';
+import WatchlistSidebar from '../components/WatchlistSidebar';
+import ChartToolbar from '../components/ChartToolbar';
+import BottomTabBar, { type BottomTab } from '../components/BottomTabBar';
 
 import { useTicker } from '../lib/hooks/useTicker';
 import { useSignal } from '../lib/hooks/useSignal';
 import { useCandleSource } from '../lib/hooks/useCandleSource';
 import { useWeightLab } from '../lib/hooks/useWeightLab';
-import type { ExchangeId, Interval } from '../lib/exchanges/types';
+import { useChartState } from '../lib/hooks/useChartState';
+import { useChartOverlays } from '../lib/hooks/useChartOverlays';
 import { supportResistance } from '../lib/indicators/supportResistance';
 import { Icon } from '../components/Icon';
 import ExchangeSelector from '../components/ExchangeSelector';
 import DemoToggle from '../components/DemoToggle';
-import WeightLabPanel from '../components/WeightLabPanel';
-
-const LAST_PAIRS_KEY = 'cs:lastPairs';
-const LAST_EXCHANGE_KEY = 'cs:lastExchange';
-const LAST_SYMBOL_KEY = 'cs:lastSymbol';
-const DEFAULT_PAIRS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
-
-const isExchangeId = (v: unknown): v is ExchangeId =>
-  v === 'binance' || v === 'okx' || v === 'bybit';
 
 export default function HomePage() {
-  const [exchange, setExchange] = useState<ExchangeId>('okx');
-  const [symbol, setSymbol] = useState('BTCUSDT');
-  const [interval, setInterval] = useState<Interval>('1h');
-  const [showBB, setShowBB] = useState(true);
-  const [showEMA, setShowEMA] = useState(true);
-  const [showFVG, setShowFVG] = useState(false);
-  const [showOB, setShowOB] = useState(false);
-  const [showSR, setShowSR] = useState(false);
-  const [showMS, setShowMS] = useState(true);
+  // Persisted market selection (exchange/symbol/interval/recents) + overlay toggles
+  const { exchange, symbol, interval, recentPairs, setExchange, setSymbol, setInterval } = useChartState();
+  const overlays = useChartOverlays();
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [signalDrawerOpen, setSignalDrawerOpen] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [bottomTab, setBottomTab] = useState<'structure' | 'backtest' | 'weightlab' | 'history'>('structure');
-
-  // Restore persisted user preferences on mount. We read in an effect (rather than
-  // a lazy useState initializer) so the first client render matches the server-
-  // rendered HTML and we avoid a hydration mismatch; the state updates right
-  // after hydration. Previously these keys were written but never read, leaving
-  // the app to always start from the okx/BTCUSDT defaults regardless of history.
-  const [recentPairs, setRecentPairs] = useState<string[]>(DEFAULT_PAIRS);
-  useEffect(() => {
-    try {
-      const exRaw = localStorage.getItem(LAST_EXCHANGE_KEY);
-      if (exRaw && isExchangeId(exRaw)) setExchange(exRaw);
-      const symRaw = localStorage.getItem(LAST_SYMBOL_KEY);
-      if (symRaw && typeof symRaw === 'string' && symRaw.trim()) setSymbol(symRaw);
-      const pairsRaw = localStorage.getItem(LAST_PAIRS_KEY);
-      const pairsParsed = pairsRaw ? JSON.parse(pairsRaw) : null;
-      if (Array.isArray(pairsParsed) && pairsParsed.every((p) => typeof p === 'string')) {
-        setRecentPairs(pairsParsed);
-      }
-    } catch {}
-    // run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [dismissError, setDismissError] = useState(false);
 
   const { candles, isLoading: klinesLoading, refresh: refreshKlines, error: klinesError, isDemo, demoPreset, setDemoPreset, setDemoMode, realError } = useCandleSource(exchange, symbol, interval, 500);
   const { ticker, refresh: refreshTicker } = useTicker(exchange, symbol);
   const weightLab = useWeightLab();
-  const signal = useSignal(candles, weightLab.weights, symbol, interval);
+  const { weights: weightLabWeights, isCustom: weightLabIsCustom } = weightLab;
+  const signal = useSignal(candles, weightLabWeights, symbol, interval);
   const srLevels = useMemo(() => {
     if (candles.length < 50) return [];
     const sr = supportResistance(candles, 100);
@@ -87,45 +56,65 @@ export default function HomePage() {
     if (candles.length > 0) setLastUpdate(new Date());
   }, [candles]);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LAST_PAIRS_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      const prev: string[] = Array.isArray(parsed) ? parsed : DEFAULT_PAIRS;
-      const next = [symbol, ...prev.filter((s) => s !== symbol)].slice(0, 6);
-      localStorage.setItem(LAST_PAIRS_KEY, JSON.stringify(next));
-      setRecentPairs(next);
-      // Persist the last-selected symbol so it can be restored on next load.
-      localStorage.setItem(LAST_SYMBOL_KEY, symbol);
-    } catch {}
-  }, [symbol]);
-
-  useEffect(() => {
-    try { localStorage.setItem(LAST_EXCHANGE_KEY, exchange); } catch {}
-  }, [exchange]);
-
   const onRefresh = useCallback(() => {
     refreshKlines();
     refreshTicker();
   }, [refreshKlines, refreshTicker]);
 
-  return (
-    <div className="min-h-screen pb-28 md:pb-6">
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <Header
-        symbol={symbol}
-        interval={interval}
-        signal={signal ? { action: signal.action, confidence: signal.confidence, score: signal.score } : null}
-        ticker={ticker}
-        isLoading={klinesLoading && candles.length === 0}
-        isRefreshing={klinesLoading && candles.length > 0}
-        onRefresh={onRefresh}
-        onOpenSettings={() => setSettingsOpen(true)}
-        lastUpdate={lastUpdate}
-      />
+  const bottomTabs: BottomTab[] = useMemo(() => [
+    {
+      id: 'structure',
+      label: 'Structure',
+      icon: <Icon.Layers size={12} />,
+      panel: (
+        <StructurePanel
+          price={signal?.price ?? 0}
+          fvgs={signal?.fvgs ?? []}
+          orderBlocks={signal?.orderBlocks ?? []}
+          msSignals={signal?.marketStructure ?? []}
+          sweeps={signal?.sweeps ?? []}
+          srLevels={srLevels}
+        />
+      ),
+    },
+    {
+      id: 'backtest',
+      label: 'Backtest',
+      icon: <Icon.Activity size={12} />,
+      panel: <BacktestPanel candles={candles} symbol={symbol} interval={interval} weights={weightLabWeights} />,
+    },
+    {
+      id: 'weightlab',
+      label: 'Weight Lab',
+      icon: <Icon.Box size={12} />,
+      badge: weightLabIsCustom ? <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-label="custom weights active" /> : undefined,
+      panel: <WeightLabPanel candles={candles} lab={weightLab} />,
+    },
+    {
+      id: 'history',
+      label: 'History',
+      icon: <Icon.Clock size={12} />,
+      panel: <HistoryPanel symbol={symbol} interval={interval} />,
+    },
+  ], [candles, interval, signal, srLevels, symbol, weightLabWeights, weightLabIsCustom, weightLab]);
 
-      <main id="main-content" className="max-w-[1600px] mx-auto px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
+  return (
+    <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col bg-bg-base pb-20 md:pb-0">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+
+      {/* ── Top terminal bar ── */}
+      <header className="shrink-0 h-14 border-b border-line bg-bg-panel flex items-center px-3 gap-3">
+<Header
+            signal={signal ? { action: signal.action, confidence: signal.confidence, score: signal.score } : null}
+            ticker={ticker}
+            isLoading={klinesLoading && candles.length === 0}
+            isRefreshing={klinesLoading && candles.length > 0}
+            onRefresh={onRefresh}
+            onOpenSettings={() => setSettingsOpen(true)}
+            lastUpdate={lastUpdate}
+          />
+        <div className="hidden md:block w-px h-6 bg-line mx-1" />
+        <div className="hidden md:flex items-center gap-2">
           <ExchangeSelector value={exchange} onChange={setExchange} />
           <PairSelector
             value={symbol}
@@ -135,8 +124,11 @@ export default function HomePage() {
             exchange={exchange}
             recents={recentPairs}
           />
-          <TimeframeTabs value={interval} onChange={setInterval} />
-          <div className="flex-1" />
+        </div>
+        <div className="flex-1 min-w-0 hidden lg:block">
+          <KPIStrip signal={signal} ticker={ticker} />
+        </div>
+        <div className="ml-auto flex items-center gap-2">
           <DemoToggle
             isDemo={isDemo}
             preset={demoPreset}
@@ -145,103 +137,117 @@ export default function HomePage() {
             realError={realError}
           />
         </div>
+      </header>
 
-        <KPIStrip signal={signal} ticker={ticker} />
+      {/* ── Main terminal layout ── */}
+      <main id="main-content" className="flex-1 min-h-0 flex flex-col md:flex-row">
+        {/* Left watchlist */}
+        <WatchlistSidebar
+          symbol={symbol}
+          recents={recentPairs}
+          onSelectSymbol={setSymbol}
+          className="hidden md:flex"
+        />
 
-        {realError && !isDemo && (
-          <div className="card p-4 border-warn/40 text-sm flex items-start gap-2">
-            <Icon.Info size={14} className="mt-0.5 flex-shrink-0 text-warn" />
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-warn">Live data unavailable from {exchange}</div>
-              <div className="text-2xs text-fg-muted mt-1 break-all">
-                {realError.message || 'Network or geo-block error. The exchange API may be blocked in your region.'}
+        {/* Center: chart + multi-timeframe + bottom tabs */}
+        <section className="flex-1 min-w-0 flex flex-col overflow-y-auto">
+          {realError && !isDemo && !dismissError && (
+            <div className="shrink-0 card mx-3 mt-3 p-3 border-warn/40 text-xs flex items-start gap-2">
+              <Icon.Info size={14} className="mt-0.5 flex-shrink-0 text-warn" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-warn">Live data unavailable from {exchange}</div>
+                <div className="text-2xs text-fg-muted mt-1 break-all">
+                  {realError.message || 'Network or geo-block error. The exchange API may be blocked in your region.'}
+                </div>
+                <div className="text-2xs text-info mt-1.5">
+                  Tip: Switch to <span className="font-bold">DEMO</span> mode in the top-right to explore with synthetic data.
+                </div>
               </div>
-              <div className="text-2xs text-info mt-1.5">
-                Tip: Switch to <span className="font-bold">DEMO</span> mode in the top-right to explore with synthetic data.
-              </div>
+              <button
+                onClick={() => setDismissError(true)}
+                aria-label="Dismiss error"
+                className="flex-shrink-0 p-1 text-fg-muted hover:text-fg transition"
+              >
+                <Icon.X size={14} />
+              </button>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-3 md:gap-4">
-          <div className="space-y-3 md:space-y-4 min-w-0">
-            <div className="card overflow-hidden">
-              <div className="h-[55vh] min-h-[360px] max-h-[640px]">
-                {klinesLoading && candles.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
-                    <div className="w-8 h-8 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
-                    <div className="text-sm text-fg-dim">Loading {symbol} {interval}…</div>
-                  </div>
-                ) : (
+          <div className="flex-1 min-h-[320px] card overflow-hidden m-3 flex flex-col">
+            <ChartToolbar
+              interval={interval}
+              onIntervalChange={setInterval}
+              showBB={overlays.showBB}
+              setShowBB={overlays.setShowBB}
+              showEMA={overlays.showEMA}
+              setShowEMA={overlays.setShowEMA}
+              showFVG={overlays.showFVG}
+              setShowFVG={overlays.setShowFVG}
+              showOB={overlays.showOB}
+              setShowOB={overlays.setShowOB}
+              showSR={overlays.showSR}
+              setShowSR={overlays.setShowSR}
+              showMS={overlays.showMS}
+              setShowMS={overlays.setShowMS}
+            />
+            <div className="relative flex-1 min-h-0">
+              {candles.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
+                  <div className="w-8 h-8 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
+                  <div className="text-sm text-fg-dim">Loading {symbol} {interval}…</div>
+                </div>
+              ) : (
+                <>
                   <PriceChart
+                    symbol={symbol}
+                    intervalLabel={interval}
                     candles={candles}
                     fvgs={signal?.fvgs ?? []}
                     orderBlocks={signal?.orderBlocks ?? []}
                     srLevels={srLevels}
                     msSignals={signal?.marketStructure ?? []}
-                    showBB={showBB}
-                    showEMA={showEMA}
-                    showFVG={showFVG}
-                    showOB={showOB}
-                    showSR={showSR}
-                    showMS={showMS}
+                    showBB={overlays.showBB}
+                    showEMA={overlays.showEMA}
+                    showFVG={overlays.showFVG}
+                    showOB={overlays.showOB}
+                    showSR={overlays.showSR}
+                    showMS={overlays.showMS}
                   />
-                )}
-              </div>
-            </div>
-
-            <MultiTimeframeRow symbol={symbol} activeTf={interval} exchange={exchange} onChangeTf={setInterval} />
-
-            <div className="space-y-3">
-              <Tabs
-                value={bottomTab}
-                onChange={(v) => setBottomTab(v as 'structure' | 'backtest' | 'weightlab' | 'history')}
-                size="sm"
-                ariaLabel="Analysis panels"
-                tabs={[
-                  { id: 'structure', label: 'Market Structure', icon: <Icon.Layers size={12} /> },
-                  { id: 'backtest', label: 'Backtest', icon: <Icon.Activity size={12} /> },
-                  { id: 'weightlab', label: 'Weight Lab', icon: <Icon.Box size={12} />, badge: weightLab.isCustom ? <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-label="custom weights active" /> : undefined },
-                  { id: 'history', label: 'History', icon: <Icon.Clock size={12} /> },
-                ]}
-              />
-              {bottomTab === 'structure' ? (
-                <div role="tabpanel" id="panel-structure" aria-labelledby="tab-structure">
-                  <StructurePanel
-                    price={signal?.price ?? 0}
-                    fvgs={signal?.fvgs ?? []}
-                    orderBlocks={signal?.orderBlocks ?? []}
-                    msSignals={signal?.marketStructure ?? []}
-                    sweeps={signal?.sweeps ?? []}
-                    srLevels={srLevels}
-                  />
-                </div>
-              ) : bottomTab === 'backtest' ? (
-                <div role="tabpanel" id="panel-backtest" aria-labelledby="tab-backtest">
-                  <BacktestPanel candles={candles} symbol={symbol} interval={interval} weights={weightLab.weights} />
-                </div>
-              ) : bottomTab === 'weightlab' ? (
-                <div role="tabpanel" id="panel-weightlab" aria-labelledby="tab-weightlab">
-                  <WeightLabPanel candles={candles} lab={weightLab} />
-                </div>
-              ) : (
-                <div role="tabpanel" id="panel-history" aria-labelledby="tab-history">
-                  <HistoryPanel symbol={symbol} interval={interval} />
-                </div>
+                  {klinesLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm z-20" role="status" aria-live="polite">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
+                        <div className="text-sm text-fg-dim">Refreshing {symbol} {interval}…</div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-            </div>
-
-            <div className="text-2xs text-fg-dim text-center py-2">
-              Data from {exchange} · Not financial advice · For analysis only
             </div>
           </div>
 
-          <aside className="hidden md:block space-y-3 md:space-y-4">
-            <SignalCard signal={signal} />
-            <RiskCard signal={signal} />
-            <IndicatorPanel signal={signal} />
-          </aside>
-        </div>
+          <div className="shrink-0 px-3 pb-2 hidden md:block">
+            <MultiTimeframeRow symbol={symbol} activeTf={interval} exchange={exchange} onChangeTf={setInterval} />
+          </div>
+
+          <BottomTabBar
+            ariaLabel="Analysis panels"
+            value={bottomTab}
+            onChange={(v) => setBottomTab(v as typeof bottomTab)}
+            tabs={bottomTabs}
+            className="shrink-0 h-64 border-t border-line"
+          />
+        </section>
+
+        {/* Right signal panel */}
+        <aside className="hidden md:flex w-80 flex-col gap-3 p-3 overflow-y-auto scrollbar-thin bg-bg-panel border-l border-line">
+          <SignalCard signal={signal} />
+          <RiskCard signal={signal} />
+          <IndicatorPanel signal={signal} />
+          <div className="text-2xs text-fg-dim text-center py-2 mt-auto">
+            Data from {exchange} · Not financial advice · For analysis only
+          </div>
+        </aside>
       </main>
 
       <MobileSignalButton signal={signal} onClick={() => setSignalDrawerOpen(true)} />
@@ -253,15 +259,37 @@ export default function HomePage() {
         side="right"
       >
         <IndicatorSettings
-          showBB={showBB} setShowBB={setShowBB}
-          showEMA={showEMA} setShowEMA={setShowEMA}
-          showFVG={showFVG} setShowFVG={setShowFVG}
-          showOB={showOB} setShowOB={setShowOB}
-          showSR={showSR} setShowSR={setShowSR}
-          showMS={showMS} setShowMS={setShowMS}
+          showBB={overlays.showBB}
+          showEMA={overlays.showEMA}
+          showFVG={overlays.showFVG}
+          showOB={overlays.showOB}
+          showSR={overlays.showSR}
+          showMS={overlays.showMS}
+          setShowBB={overlays.setShowBB}
+          setShowEMA={overlays.setShowEMA}
+          setShowFVG={overlays.setShowFVG}
+          setShowOB={overlays.setShowOB}
+          setShowSR={overlays.setShowSR}
+          setShowMS={overlays.setShowMS}
         />
         <div className="divider my-4" />
-        <div className="text-2xs text-fg-dim leading-relaxed">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={overlays.showDefaults}
+            className="flex-1 h-9 rounded text-xs font-bold border bg-bg-elevated border-line text-fg-muted hover:border-line-strong hover:text-fg transition cursor-pointer"
+          >
+            Show Defaults
+          </button>
+          <button
+            type="button"
+            onClick={overlays.hideAll}
+            className="flex-1 h-9 rounded text-xs font-bold border bg-bg-elevated border-line text-fg-muted hover:border-line-strong hover:text-fg transition cursor-pointer"
+          >
+            Hide All
+          </button>
+        </div>
+        <div className="text-2xs text-fg-dim leading-relaxed mt-3">
           Overlays only change visual rendering. The signal scoring always uses all 10 indicators regardless of toggles.
         </div>
       </Drawer>

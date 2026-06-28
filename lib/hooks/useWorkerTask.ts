@@ -17,9 +17,21 @@ type WorkerResponse =
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; type: string };
 
+// Singleton worker + pending registry live at module scope so the same
+// worker instance is reused across React components. The down-side is that
+// HMR (Vite/Next dev mode) re-evaluates this module and re-creates the
+// worker, while the *old* worker may still be processing tasks that will
+// arrive on the *new* listener. The `disposeWorker()` function below, wired
+// into import.meta.hot.dispose when available, terminates the worker and
+// rejects all in-flight tasks so HMR transitions don't leave orphan state.
 let _sharedWorker: Worker | null = null;
 let _idCounter = 0;
 const _pending = new Map<number, Pending>();
+
+const rejectAllPending = (reason: string): void => {
+  for (const [, p] of _pending) p.reject(new Error(reason));
+  _pending.clear();
+};
 
 const ensureWorker = (): Worker | null => {
   if (typeof window === 'undefined') return null;
@@ -35,9 +47,13 @@ const ensureWorker = (): Worker | null => {
       else p.reject(new Error(msg.error));
     });
     _sharedWorker.addEventListener('error', (e) => {
-      // Reject all pending tasks on worker error
-      for (const [, p] of _pending) p.reject(new Error(e.message || 'worker error'));
-      _pending.clear();
+      // Worker-level error (script crash, init failure). Reject all pending
+      // tasks; the next ensureWorker() call will re-create the worker.
+      rejectAllPending(e.message || 'worker error');
+      if (_sharedWorker) {
+        _sharedWorker.terminate();
+        _sharedWorker = null;
+      }
     });
     return _sharedWorker;
   } catch (e) {
@@ -63,6 +79,21 @@ const checkWorkerAvailable = (): boolean => {
   return _workerAvailable;
 };
 
+// HMR cleanup: terminate the worker and reject pending tasks when the
+// module is replaced during hot reload, so the next page refresh starts
+// from a clean slate.
+const disposeWorker = (): void => {
+  rejectAllPending('worker disposed (HMR)');
+  if (_sharedWorker) {
+    _sharedWorker.terminate();
+    _sharedWorker = null;
+  }
+};
+
+if (typeof import.meta !== 'undefined' && (import.meta as any).hot) {
+  (import.meta as any).hot.dispose(disposeWorker);
+}
+
 const runOnWorker = <T,>(type: WorkerTask['type'], payload: unknown): Promise<T> => {
   const worker = ensureWorker();
   if (!worker) return Promise.reject(new Error('worker unavailable'));
@@ -85,10 +116,25 @@ export const useWorkerBacktest = (candles: Candle[], options: BacktestOptions = 
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workerAvailable] = useState<boolean>(checkWorkerAvailable());
-  const versionRef = useRef(0);
+  // cancelledRef is bumped on every effect run + on unmount. Late worker
+  // results (or in-flight main-thread fallbacks) that arrive after a cancel
+  // are dropped by checking the counter at the start of .then/.catch.
+  const cancelledRef = useRef(0);
+  // optionsRef + optionsKeyRef track the current options object across
+  // renders. We serialize once per render (not on every effect run) and
+  // use the serialized string as the dep, so the effect only re-fires when
+  // the options actually change — not on every parent render that produces
+  // a fresh options object reference.
+  const optionsRef = useRef<BacktestOptions>(options);
+  const optionsKeyRef = useRef<string>(JSON.stringify(options));
+  const optionsKey = JSON.stringify(options);
+  if (optionsKey !== optionsKeyRef.current) {
+    optionsKeyRef.current = optionsKey;
+    optionsRef.current = options;
+  }
 
   useEffect(() => {
-    const version = ++versionRef.current;
+    const version = ++cancelledRef.current;
     setError(null);
 
     if (candles.length < 250) {
@@ -97,34 +143,36 @@ export const useWorkerBacktest = (candles: Candle[], options: BacktestOptions = 
       return;
     }
 
+    const currentOptions = optionsRef.current;
     setIsRunning(true);
-    runOnWorker<BacktestResult>('backtest', { candles, options })
+    runOnWorker<BacktestResult>('backtest', { candles, options: currentOptions })
       .then((r) => {
-        if (version !== versionRef.current) return;
+        if (version !== cancelledRef.current) return;
         setResult(r);
         setIsRunning(false);
       })
       .catch((e) => {
-        if (version !== versionRef.current) return;
+        if (version !== cancelledRef.current) return;
         if (typeof console !== 'undefined') console.warn('[useWorkerBacktest] worker failed, running on main thread:', e);
         try {
-          const r = runBacktest(candles, options);
-          if (version === versionRef.current) {
+          const r = runBacktest(candles, currentOptions);
+          if (version === cancelledRef.current) {
             setResult(r);
             setError(null);
           }
         } catch (fallbackErr) {
-          if (version === versionRef.current) {
+          if (version === cancelledRef.current) {
             setError(fallbackErr instanceof Error ? fallbackErr.message : 'backtest failed');
           }
         } finally {
-          if (version === versionRef.current) setIsRunning(false);
+          if (version === cancelledRef.current) setIsRunning(false);
         }
       });
 
-    return () => {};
+    return () => { cancelledRef.current++; }; // eslint-disable-line react-hooks/exhaustive-deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candles, JSON.stringify(options)]);
+  }, [candles, optionsKey]);
+
 
   return { result, isRunning, error, workerAvailable };
 };
@@ -141,22 +189,28 @@ export const useWorkerOptimize = (): WorkerOptimizeState & { run: (candles: Cand
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ generation: number; total: number } | null>(null);
+  const cancelledRef = useRef(0);
 
   const run = useCallback(async (candles: Candle[], config?: Partial<OptimizerConfig>): Promise<OptimizationResult | null> => {
+    const version = ++cancelledRef.current;
     setIsRunning(true);
     setError(null);
     setProgress({ generation: 0, total: config?.generations ?? 8 });
     try {
       const r = await runOnWorker<OptimizationResult>('optimize', { candles, config });
+      // Drop stale results if a new optimization was started (or the
+      // component unmounted) while this one was in flight.
+      if (version !== cancelledRef.current) return null;
       setResult(r);
       setProgress({ generation: r.generations, total: r.generations });
       setTimeout(() => setProgress(null), 1500);
       return r;
     } catch (e) {
+      if (version !== cancelledRef.current) return null;
       setError(e instanceof Error ? e.message : 'optimize failed');
       return null;
     } finally {
-      setIsRunning(false);
+      if (version === cancelledRef.current) setIsRunning(false);
     }
   }, []);
 
@@ -164,11 +218,5 @@ export const useWorkerOptimize = (): WorkerOptimizeState & { run: (candles: Cand
 };
 
 export const isWorkerAvailable = checkWorkerAvailable;
-export const _resetWorker = (): void => {
-  if (_sharedWorker) {
-    _sharedWorker.terminate();
-    _sharedWorker = null;
-  }
-  for (const [, p] of _pending) p.reject(new Error('worker reset'));
-  _pending.clear();
-};
+export const _resetWorker = (): void => disposeWorker();
+

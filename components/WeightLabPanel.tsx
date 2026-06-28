@@ -48,7 +48,7 @@ export default function WeightLabPanel({ candles, lab }: Props) {
       </div>
 
       {lab.error && (
-        <div className="text-2xs text-sell bg-sell/10 border border-sell/30 rounded p-2">{lab.error}</div>
+        <div className="text-2xs text-warn bg-warn/10 border border-warn/30 rounded p-2">{lab.error}</div>
       )}
 
       {/* Run optimize */}
@@ -58,7 +58,7 @@ export default function WeightLabPanel({ candles, lab }: Props) {
           disabled={!canOptimize}
           className={`h-9 px-3 text-xs rounded font-bold border transition cursor-pointer ${
             canOptimize
-              ? 'bg-info/15 border-info/40 text-info hover:bg-info/25'
+              ? 'bg-accent/15 border-accent/40 text-accent hover:bg-accent/25'
               : 'bg-bg-elevated border-line text-fg-dim cursor-not-allowed'
           }`}
         >
@@ -81,7 +81,7 @@ export default function WeightLabPanel({ candles, lab }: Props) {
             best <span className="text-fg font-bold tabular">{fmtNum(lab.lastResult.best.fitness)}</span>
             {' · '}baseline <span className="tabular">{fmtNum(lab.lastResult.baselineFitness)}</span>
             {' · '}
-            <span className={lab.lastResult.improvement >= 0 ? 'text-buy' : 'text-sell'}>
+            <span className={lab.lastResult.improvement >= 0 ? 'text-info' : 'text-warn'}>
               {fmtPct(lab.lastResult.improvement * 100, true)}
             </span>
             {' · '}{(lab.lastResult.durationMs / 1000).toFixed(1)}s
@@ -123,15 +123,19 @@ export default function WeightLabPanel({ candles, lab }: Props) {
               return (
                 <button
                   key={i}
-                  onClick={() => lab.applyResult(ind as any)}
-                  className="w-full text-left p-1.5 rounded bg-bg-panel hover:bg-bg-hover border border-line text-2xs flex items-center gap-2 transition"
+                  onClick={() => lab.applyResult(ind)}
+                  className="w-full text-left p-1.5 rounded bg-bg-panel hover:bg-bg-hover border border-line text-2xs flex flex-wrap items-center gap-x-1.5 gap-y-0.5 transition"
                 >
-                  <span className={`w-5 h-5 inline-flex items-center justify-center rounded font-bold ${i === 0 ? 'bg-buy/20 text-buy' : 'bg-bg-elevated text-fg-dim'}`}>#{i + 1}</span>
-                  <span className="font-bold tabular text-fg">{fmtNum(ind.fitness)}</span>
-                  <span className="text-fg-dim">· {ind.weights.bb.toFixed(1)}/{ind.weights.rsi.toFixed(1)}/{ind.weights.macd.toFixed(1)}/{ind.weights.sr.toFixed(1)}</span>
-                  <span className="text-fg-dim">· {ind.weights.trend.toFixed(1)}/{ind.weights.divergence.toFixed(1)}</span>
+                  <span className={`w-5 h-5 inline-flex items-center justify-center rounded font-bold flex-shrink-0 ${i === 0 ? 'bg-accent/20 text-accent' : 'bg-bg-elevated text-fg-dim'}`}>#{i + 1}</span>
+                  <span className="font-bold tabular text-fg flex-shrink-0">{fmtNum(ind.fitness)}</span>
+                  <span className="text-fg-dim truncate min-w-0" title="bb / rsi / macd / sr">
+                    · {ind.weights.bb.toFixed(1)}/{ind.weights.rsi.toFixed(1)}/{ind.weights.macd.toFixed(1)}/{ind.weights.sr.toFixed(1)}
+                  </span>
+                  <span className="text-fg-dim truncate min-w-0" title="trend / divergence">
+                    · {ind.weights.trend.toFixed(1)}/{ind.weights.divergence.toFixed(1)}
+                  </span>
                   <span className="flex-1" />
-                  <span className="text-fg-dim tabular">Σ={total}</span>
+                  <span className="text-fg-dim tabular flex-shrink-0">Σ={total}</span>
                 </button>
               );
             })}
@@ -168,7 +172,7 @@ export default function WeightLabPanel({ candles, lab }: Props) {
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-line">
         <button
           onClick={lab.save}
-          className="h-8 px-3 text-2xs rounded bg-buy/15 border border-buy/30 text-buy hover:bg-buy/25 font-bold transition cursor-pointer"
+          className="h-8 px-3 text-2xs rounded bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 font-bold transition cursor-pointer"
         >
           Save
         </button>
@@ -180,7 +184,7 @@ export default function WeightLabPanel({ candles, lab }: Props) {
         </button>
         <button
           onClick={lab.clear}
-          className="h-8 px-3 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-sell/40 hover:text-sell transition cursor-pointer"
+          className="h-8 px-3 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-warn/40 hover:text-warn transition cursor-pointer"
         >
           Clear Saved
         </button>
@@ -239,7 +243,7 @@ const WeightSlider = ({
   const max = defaultValue * 1.5;
   const delta = value - defaultValue;
   const deltaPct = defaultValue > 0 ? (delta / defaultValue) * 100 : 0;
-  const tone = Math.abs(delta) < 1e-6 ? 'text-fg-dim' : delta > 0 ? 'text-buy' : 'text-sell';
+  const tone = Math.abs(delta) < 1e-6 ? 'text-fg-dim' : delta > 0 ? 'text-info' : 'text-warn';
   const fillPct = ((value - min) / (max - min)) * 100;
 
   return (

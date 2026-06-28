@@ -116,11 +116,16 @@ export type Signal = {
 /** Clamps a value between min and max */
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
+/** Numeric sign for a regime bias (bullish=+1, bearish=-1, neutral=0). */
+const biasSign = (b: 'bullish' | 'bearish' | 'neutral'): -1 | 0 | 1 =>
+  b === 'bullish' ? 1 : b === 'bearish' ? -1 : 0;
+
 /**
  * Bollinger Bands position score.
  * Returns +w at lower band, -w at upper band, 0 at middle. w = weights.bb.
  */
-const bbScore = (price: number, last: { upper: number | null; lower: number | null; middle: number | null }, w: number): number => {
+const bbScore = (price: number, last: { upper: number | null; lower: number | null; middle: number | null } | undefined, w: number): number => {
+  if (!last) return 0;
   if (last.upper === null || last.lower === null || last.middle === null) return 0;
   const range = last.upper - last.lower;
   if (range === 0) return 0;
@@ -349,40 +354,87 @@ const rangeMeanReversionBoost = (regime: Regime, price: number, ema50: number | 
   return s;
 };
 
+/**
+ * Bundle of raw indicator outputs used to derive the signal components.
+ * `degraded` lists the names of indicators that threw or returned malformed
+ * data (NaN/Infinity); null/empty arrays in the other fields are also
+ * possible because every indicator is wrapped in `safeIndicator`.
+ */
+type IndicatorState = {
+  bb: ReturnType<typeof bollinger>;
+  rsiSeries: (number | null)[];
+  macdSeries: ReturnType<typeof macd>;
+  ema50Series: (number | null)[];
+  ema200Series: (number | null)[];
+  emaCross: { trend: 'bullish' | 'bearish' | 'neutral'; diff: number | null };
+  atrSeries: (number | null)[];
+  cv: { cvd: number[]; slope: number; delta: number[] };
+  rvol: number | null;
+  sr: { pivots: import('./indicators/supportResistance').SRLevel[]; supports: import('./indicators/supportResistance').SRLevel[]; resistances: import('./indicators/supportResistance').SRLevel[] };
+  fvgs: FVG[];
+  obs: OrderBlock[];
+  ms: MSSignal[];
+  sweeps: Sweep[];
+  adxSeries: { adx: number | null; pdi: number | null; ndi: number | null }[];
+  rsiDiv: Divergence | null;
+  macdDiv: Divergence | null;
+  cvdDiv: CVDDivergence | null;
+  vp: VolumeProfile | null;
+  pocNear: boolean;
+  lastBB: { middle: number | null; upper: number | null; lower: number | null; width: number | null } | undefined;
+  lastRSI: number | null;
+  lastMACD: { macd: number | null; signal: number | null; hist: number | null } | undefined;
+  prevMACD: { macd: number | null; signal: number | null; hist: number | null } | undefined;
+  lastATR: number | null;
+  lastEma50: number | null;
+  lastEma200: number | null;
+  lastADX: { adx: number | null; pdi: number | null; ndi: number | null };
+  bbWidth: number | null;
+  bbPos: number | null;
+  regime: Regime;
+  regimeBias: 'bullish' | 'bearish' | 'neutral';
+  /** Full regime classification (includes strength + sideways flag for reasons). */
+  richRegime: RegimeResult;
+  emaDiffPct: number | null;
+  nearest: ReturnType<typeof nearestSR>;
+  fvgCtx: ReturnType<typeof fvgNear>;
+  obCtx: ReturnType<typeof obNear>;
+  msLast: MSSignal | null;
+  sweepLast: Sweep | null;
+};
 
-export const computeSignal = (candles: Candle[], options?: { weights?: Partial<SignalWeights> }): Signal | null => {
-  if (candles.length < 210) return null;
-  const W = resolveWeights(options?.weights);
-  const closes = candles.map((c) => c.close);
-  const price = closes[closes.length - 1];
-  const degradedIndicators: string[] = [];
-
-  const bb = safeIndicator('bb', () => bollinger(candles, 20, 2), [], degradedIndicators);
-  const rsiSeries = safeIndicator('rsi', () => rsi(closes, 14), [], degradedIndicators);
-  const macdSeries = safeIndicator('macd', () => macd(closes, 12, 26, 9), [], degradedIndicators);
-  const ema50Series = safeIndicator('ema50', () => emaSeries(closes, 50), [], degradedIndicators);
-  const ema200Series = safeIndicator('ema200', () => emaSeries(closes, 200), [], degradedIndicators);
-  const emaCross = safeIndicator('emaCross', () => emaCrossSignal(closes, 50, 200), { trend: 'neutral' as const, diff: null }, degradedIndicators);
-  const atrSeries = safeIndicator('atr', () => atr(candles, 14), [], degradedIndicators);
-  const cv = safeIndicator('cvd', () => cvd(candles), { cvd: [], slope: 0, delta: [] }, degradedIndicators);
-  const rvol = safeIndicator('rvol', () => relativeVolume(candles, 20), null, degradedIndicators);
-  const sr = safeIndicator('sr', () => supportResistance(candles, 100), { pivots: [], supports: [], resistances: [] }, degradedIndicators);
-  const fvgs = safeIndicator('fvg', () => detectFVG(candles, 100, 0.05), [], degradedIndicators);
-  const obs = safeIndicator('ob', () => detectOrderBlocks(candles, 100, 0.4), [], degradedIndicators);
-  const ms = safeIndicator('ms', () => detectMarketStructure(candles, 100), [], degradedIndicators);
-  const sweeps = safeIndicator('sweep', () => detectLiquiditySweeps(candles, 100, 0.002), [], degradedIndicators);
-  const adxSeries = safeIndicator('adx', () => adx(candles, 14), [{ adx: null, pdi: null, ndi: null }], degradedIndicators);
-  const rsiDiv = safeIndicator('rsiDiv', () => detectDivergence(closes, rsiSeries, 3, 100), null, degradedIndicators);
-  const macdLineSeries = safeIndicator('macdLine', () => macdSeries.map((m) => m.macd), [], degradedIndicators);
-  const macdDiv = safeIndicator('macdDiv', () => detectDivergence(closes, macdLineSeries, 3, 100), null, degradedIndicators);
-  const cvdDiv = safeIndicator('cvdDiv', () => detectCVDDivergence(closes, cv.cvd, 3, 100), null, degradedIndicators);
-  const vp = safeIndicator('vp', () => volumeProfile(candles, 50, 0.7), null, degradedIndicators);
-  const pocNearPrice = safeIndicator('pocNear', () => nearestPOC(price, vp), null, degradedIndicators);
+/**
+ * Runs every indicator through `safeIndicator` and packages the outputs +
+ * derived last-bar values + regime classification. Pure orchestration:
+ * no scoring, no action decision, no SL/TP. Returns the same data that
+ * the previous inline body of `computeSignal` built up in 50+ lines.
+ */
+const gatherIndicatorState = (candles: Candle[], closes: number[], price: number, degraded: string[]): IndicatorState => {
+  const bb = safeIndicator('bb', () => bollinger(candles, 20, 2), [], degraded);
+  const rsiSeries = safeIndicator('rsi', () => rsi(closes, 14), [], degraded);
+  const macdSeries = safeIndicator('macd', () => macd(closes, 12, 26, 9), [], degraded);
+  const ema50Series = safeIndicator('ema50', () => emaSeries(closes, 50), [], degraded);
+  const ema200Series = safeIndicator('ema200', () => emaSeries(closes, 200), [], degraded);
+  const emaCross = safeIndicator('emaCross', () => emaCrossSignal(closes, 50, 200), { trend: 'neutral' as const, diff: null }, degraded);
+  const atrSeries = safeIndicator('atr', () => atr(candles, 14), [], degraded);
+  const cv = safeIndicator('cvd', () => cvd(candles), { cvd: [], slope: 0, delta: [] }, degraded);
+  const rvol = safeIndicator('rvol', () => relativeVolume(candles, 20), null, degraded);
+  const sr = safeIndicator('sr', () => supportResistance(candles, 100), { pivots: [], supports: [], resistances: [] }, degraded);
+  const fvgs = safeIndicator('fvg', () => detectFVG(candles, 100, 0.05), [], degraded);
+  const obs = safeIndicator('ob', () => detectOrderBlocks(candles, 100, 0.4), [], degraded);
+  const ms = safeIndicator('ms', () => detectMarketStructure(candles, 100), [], degraded);
+  const sweeps = safeIndicator('sweep', () => detectLiquiditySweeps(candles, 100, 0.002), [], degraded);
+  const adxSeries = safeIndicator('adx', () => adx(candles, 14), [{ adx: null, pdi: null, ndi: null }], degraded);
+  const rsiDiv = safeIndicator('rsiDiv', () => detectDivergence(closes, rsiSeries, 3, 100), null, degraded);
+  const macdLineSeries = safeIndicator('macdLine', () => macdSeries.map((m) => m.macd), [], degraded);
+  const macdDiv = safeIndicator('macdDiv', () => detectDivergence(closes, macdLineSeries, 3, 100), null, degraded);
+  const cvdDiv = safeIndicator('cvdDiv', () => detectCVDDivergence(closes, cv.cvd, 3, 100), null, degraded);
+  const vp = safeIndicator('vp', () => volumeProfile(candles, 50, 0.7), null, degraded);
+  const pocNearPrice = safeIndicator('pocNear', () => nearestPOC(price, vp), null, degraded);
 
   const lastBB = bb[bb.length - 1];
   const bbPos = lastBB && lastBB.lower !== null && lastBB.upper !== null ? ((price - lastBB.lower) / (lastBB.upper - lastBB.lower)) * 100 : null;
   const lastRSI = rsiSeries[rsiSeries.length - 1];
-
   const lastMACD = macdSeries[macdSeries.length - 1];
   const prevMACD = macdSeries[macdSeries.length - 2];
   const lastATR = atrSeries[atrSeries.length - 1];
@@ -390,27 +442,58 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
   const lastEma200 = ema200Series[ema200Series.length - 1];
   const lastADX = adxSeries[adxSeries.length - 1];
   const bbWidth = bb[bb.length - 1]?.width ?? null;
+
   const regimeInputs = computeRegimeInputs(closes, ema50Series, ema200Series, bbWidth, lastADX.adx);
   const richRegime = classifyRegimeRich(
     lastADX.adx, lastADX.pdi, lastADX.ndi,
     regimeInputs.emaSpreadPct, bbWidth,
     regimeInputs.crossCount, regimeInputs.ema50Slope
   );
-  const regime: Regime = richRegime.regime;
-  const regimeBias = richRegime.bias;
 
   const allLevels = [...sr.pivots, ...sr.supports, ...sr.resistances];
-  const nearest = nearestSR(price, allLevels);
-  const fvgCtx = fvgNear(price, fvgs);
-  const obCtx = obNear(price, obs);
-  const msLast = latestMS(ms);
-  const sweepLast = latestSweep(sweeps);
+
+  return {
+    bb, rsiSeries, macdSeries, ema50Series, ema200Series, emaCross,
+    atrSeries, cv, rvol, sr, fvgs, obs, ms, sweeps, adxSeries,
+    rsiDiv, macdDiv, cvdDiv, vp, pocNear: pocNearPrice !== null,
+    lastBB, lastRSI, lastMACD, prevMACD, lastATR, lastEma50, lastEma200, lastADX,
+    bbWidth, bbPos,
+    regime: richRegime.regime,
+    regimeBias: richRegime.bias,
+    richRegime,
+    emaDiffPct: regimeInputs.emaSpreadPct,
+    nearest: nearestSR(price, allLevels),
+    fvgCtx: fvgNear(price, fvgs),
+    obCtx: obNear(price, obs),
+    msLast: latestMS(ms),
+    sweepLast: latestSweep(sweeps),
+  };
+};
+
+/**
+ * Computes the 12 component scores + applies the regime-aware trend/divergence
+ * adjustments that the previous inline body handled. Returns the per-component
+ * scores and the (regime-adjusted) trend score separately so the caller can
+ * still apply the ±4 bias bonus and the volume-confirmation bonus.
+ */
+const scoreSignalComponents = (st: IndicatorState, price: number, W: SignalWeights): { components: SignalComponents; trend: number; volumeBoost: number; regimeVolumeBoost: number } => {
+  const { lastBB, lastRSI, lastMACD, prevMACD, lastEma50, lastEma200, emaCross, rvol, cv, cvdDiv,
+          pocNear, nearest, fvgCtx, obCtx, msLast, sweepLast, regime, regimeBias } = st;
 
   const components: SignalComponents = {
     bb: bbScore(price, lastBB, W.bb),
     rsi: rsiScore(lastRSI, W.rsi),
-    macd: macdScore(lastMACD && prevMACD ? { macd: lastMACD.macd!, signal: lastMACD.signal!, hist: lastMACD.hist! } : null, prevMACD ? { macd: prevMACD.macd!, signal: prevMACD.signal!, hist: prevMACD.hist! } : null, W.macd),
-    sr: srScore(price, nearest.support?.price ?? null, nearest.resistance?.price ?? null, pocNearPrice !== null, W.sr),
+    macd: (() => {
+      if (!lastMACD || !prevMACD) return 0;
+      if (lastMACD.macd === null || lastMACD.signal === null || lastMACD.hist === null) return 0;
+      if (prevMACD.macd === null || prevMACD.signal === null || prevMACD.hist === null) return 0;
+      return macdScore(
+        { macd: lastMACD.macd, signal: lastMACD.signal, hist: lastMACD.hist },
+        { macd: prevMACD.macd, signal: prevMACD.signal, hist: prevMACD.hist },
+        W.macd
+      );
+    })(),
+    sr: srScore(price, nearest.support?.price ?? null, nearest.resistance?.price ?? null, pocNear, W.sr),
     fvg: fvgScore(price, fvgCtx.inside, fvgCtx.nearestBull, fvgCtx.nearestBear, W.fvg),
     ema: emaScore(emaCross.trend, price, lastEma50, lastEma200, W.ema),
     volume: volumeScore(cv.slope, rvol, cvdDiv, W.volume),
@@ -421,9 +504,8 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
     divergence: 0,
   };
 
-  // Regime-aware scoring:
-  // - trending: stronger trend-following bias
-  // - ranging: oscillators/SR slightly more important, trend contribution dampened
+  // Regime-aware trend score: trending + bullish/bearish alignment → ±W.trend,
+  // transitional → partial ±W.trend * 6/15. Dampened in ranging regime.
   let trend = 0;
   if (lastEma50 !== null && lastEma200 !== null) {
     if (price > lastEma50 && lastEma50 > lastEma200) trend = W.trend;
@@ -434,17 +516,40 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
   trend *= regimeTrendMultiplier(regime, regimeBias);
   components.trend = trend;
 
+  // Volume boost for confidence: only when |volumeScore| ≥ 75% of weight.
   const volumeBoost = Math.abs(volumeScore(cv.slope, rvol, cvdDiv, W.volume)) >= W.volume * 0.75 ? 4 : 0;
+  // Plus regime-level volume bonus when CVD divergence or high RVOL agrees.
   const regimeVolumeBoost = (cvdDiv ? 2 : 0) + (rvol !== null && rvol >= 1.5 ? 2 : 0);
   components.volume *= regimeVolumeMultiplier(regime);
 
-  // Divergence score: 50% of weight per bullish/bearish (RSI & MACD combined ≤ w)
+  // Divergence: split the divergence weight evenly between RSI and MACD.
   let divScore = 0;
-  if (rsiDiv) divScore += rsiDiv.type === 'bullish' ? W.divergence * 0.5 : -W.divergence * 0.5;
-  if (macdDiv) divScore += macdDiv.type === 'bullish' ? W.divergence * 0.5 : -W.divergence * 0.5;
+  if (st.rsiDiv) divScore += st.rsiDiv.type === 'bullish' ? W.divergence * 0.5 : -W.divergence * 0.5;
+  if (st.macdDiv) divScore += st.macdDiv.type === 'bullish' ? W.divergence * 0.5 : -W.divergence * 0.5;
   components.divergence = divScore;
 
-  // Regime-specific component blending: in trend, let trend + volume dominate.
+  return { components, trend, volumeBoost, regimeVolumeBoost };
+};
+
+
+export const computeSignal = (candles: Candle[], options?: { weights?: Partial<SignalWeights> }): Signal | null => {
+  if (candles.length < 210) return null;
+  const W = resolveWeights(options?.weights);
+  const closes = candles.map((c) => c.close);
+  const price = closes[closes.length - 1];
+  const degradedIndicators: string[] = [];
+
+  // 1. Collect raw indicator outputs + derived last-bar + regime classification.
+  const st = gatherIndicatorState(candles, closes, price, degradedIndicators);
+  const { regime, regimeBias, lastEma50, lastEma200, lastRSI, lastMACD, lastADX, lastATR, lastBB, bbPos, bbWidth,
+          fvgs, obs, ms, sweeps, cv, rvol, cvdDiv, vp, rsiDiv, macdDiv, emaCross, pocNear, emaDiffPct,
+          nearest, fvgCtx, obCtx, msLast, sweepLast, richRegime } = st;
+
+  // 2. Score the 12 components (with regime-aware trend + divergence adjustments).
+  const { components, trend, volumeBoost, regimeVolumeBoost } = scoreSignalComponents(st, price, W);
+
+  // 3. Blend: regimeScaledScore is the raw sum, then add range/trend boosts,
+  //    bias bonus, and a volume-confirmation bonus.
   const regimeScaledScore = clamp(
     Math.round(
       components.bb +
@@ -464,13 +569,20 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
     100
   );
 
+  // Volume boost only applies when volume direction agrees with the dominant
+  // signal direction (regime score → trend → bias fallback chain).
+  const dominantSign = Math.sign(regimeScaledScore || trend || biasSign(regimeBias));
+  const volumeConfirms = Math.sign(components.volume) === dominantSign;
+  const volumeConfirmationBonus = volumeConfirms ? regimeVolumeBoost : 0;
+  const biasBonus = biasSign(regimeBias) * 4; // ±4 bonus for explicit bias
+
   const score = clamp(
     Math.round(
       regimeScaledScore +
         rangeMeanReversionBoost(regime, price, lastEma50, lastEma200, lastRSI, bbPos, W.rsi) +
-        trendFollowingBoost(regime, lastADX.adx, emaCross.diff, price, lastEma50, lastEma200, W.trend) +
-        (regimeBias === 'bullish' ? 4 : regimeBias === 'bearish' ? -4 : 0) +
-        (Math.sign(components.volume) === Math.sign(regimeScaledScore || trend || (regimeBias === 'bullish' ? 1 : regimeBias === 'bearish' ? -1 : 0)) ? regimeVolumeBoost : 0)
+        trendFollowingBoost(regime, lastADX.adx, emaDiffPct, price, lastEma50, lastEma200, W.trend) +
+        biasBonus +
+        volumeConfirmationBonus
     ),
     -100,
     100
@@ -483,7 +595,7 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
 
   const reasons: string[] = [];
   if (lastRSI !== null) reasons.push(`RSI ${lastRSI.toFixed(1)} → ${lastRSI < 30 ? 'oversold' : lastRSI > 70 ? 'overbought' : 'neutral'}`);
-  if (lastMACD) reasons.push(`MACD ${lastMACD.macd! > lastMACD.signal! ? 'bullish' : 'bearish'} cross`);
+  if (lastMACD && lastMACD.macd !== null && lastMACD.signal !== null) reasons.push(`MACD ${lastMACD.macd > lastMACD.signal ? 'bullish' : 'bearish'} cross`);
   if (lastBB) reasons.push(`BB position ${((lastBB.lower && lastBB.upper) ? ((price - lastBB.lower) / (lastBB.upper - lastBB.lower)) * 100 : 0).toFixed(0)}%`);
   if (emaCross.trend !== 'neutral') reasons.push(`EMA50/200 ${emaCross.trend}`);
   if (fvgCtx.inside) reasons.push(`Price inside ${fvgCtx.inside.type} FVG`);
@@ -496,7 +608,7 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
   if (rsiDiv) reasons.push(`${rsiDiv.kind === 'regular' ? 'Regular' : 'Hidden'} ${rsiDiv.type} RSI divergence`);
   if (macdDiv) reasons.push(`${macdDiv.kind === 'regular' ? 'Regular' : 'Hidden'} ${macdDiv.type} MACD divergence`);
   if (cvdDiv) reasons.push(`${cvdDiv.kind === 'regular' ? 'Regular' : 'Hidden'} ${cvdDiv.type} CVD divergence`);
-  if (pocNearPrice !== null) reasons.push('Price near Volume POC (high interest)');
+  if (pocNear) reasons.push('Price near Volume POC (high interest)');
 
   // Volume gate: require rvol >= 1.0 for any entry, rvol >= 1.2 for full confidence
   const rvolGate = rvol !== null && rvol >= 1.0;
@@ -607,13 +719,16 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
   // low confidence → extend TP to compensate for lower win rate
   const atrVal = lastATR ?? price * 0.01;
   const srBuffer = 0.0015;
-  const maxSLDistPct = regime === 'trending' ? 0.08 : 0.05;
-  const slAtrMult = regime === 'trending' ? 2.5 : regime === 'ranging' ? 2.0 : 2.0;
-  const tpAtrMult = regime === 'trending' ? 4.0 : regime === 'ranging' ? 2.6 : 3.0;
-  const minTPDistPct = regime === 'ranging' ? 0.012 : regime === 'trending' ? 0.012 : 0.006;
-  const baseMinSLPct = regime === 'ranging' ? 0.010 : regime === 'trending' ? 0.008 : 0.005;
-  const minSRSLDistPct = regime === 'ranging' ? 0.005 : 0.005;
-  const minSRTPDistPct = regime === 'ranging' ? 0.012 : 0.012;
+
+  // Risk limits per regime. Lookup table is more readable than nested ternaries
+  // and easier to tune — the rest of the SL/TP math reads against `limits`.
+  const RISK_LIMITS = {
+    trending:  { slAtrMult: 2.5, tpAtrMult: 4.0, maxSLDistPct: 0.08, minTPDistPct: 0.012, baseMinSLPct: 0.008, minSRSLDistPct: 0.005, minSRTPDistPct: 0.012 },
+    ranging:   { slAtrMult: 2.0, tpAtrMult: 2.6, maxSLDistPct: 0.05, minTPDistPct: 0.012, baseMinSLPct: 0.010, minSRSLDistPct: 0.005, minSRTPDistPct: 0.012 },
+    transitional: { slAtrMult: 2.0, tpAtrMult: 3.0, maxSLDistPct: 0.05, minTPDistPct: 0.006, baseMinSLPct: 0.005, minSRSLDistPct: 0.005, minSRTPDistPct: 0.012 },
+  } as const;
+  const limits = RISK_LIMITS[regime];
+  const { slAtrMult, tpAtrMult, maxSLDistPct, minTPDistPct, baseMinSLPct, minSRSLDistPct, minSRTPDistPct } = limits;
 
   // Volatility-adaptive SL floor: when ATR% > 1.5%, raise SL floor to ~0.4×ATR
   // so noise doesn't immediately trigger stops on tight entries.
@@ -668,7 +783,8 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
     stopLoss = price - atrVal * slAtrMult;
     takeProfit = price + atrVal * tpAtrMult;
   }
-  const rr = Math.abs((takeProfit - price) / (price - stopLoss)) || 1;
+  const denominator = price - stopLoss;
+  const rr = Math.abs(denominator) < 1e-10 ? 1 : Math.abs((takeProfit - price) / denominator);
 
   // Surface source in reasons for transparency
   if (gatedAction !== 'HOLD') {
@@ -706,7 +822,7 @@ export const computeSignal = (candles: Candle[], options?: { weights?: Partial<S
     macdDivergence: macdDiv,
     cvdDivergence: cvdDiv,
     volumeProfile: vp,
-    pocNear: pocNearPrice !== null,
+    pocNear,
     degraded: degradedIndicators.length > 0,
     degradedIndicators,
   };

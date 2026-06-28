@@ -14,7 +14,7 @@ export default function MobileSignalButton({ signal, onClick }: Props) {
     <button
       onClick={onClick}
       aria-label={`View ${signal.action} signal details, ${signal.confidence}% confidence at ${fmtPrice(signal.price)}`}
-      className={`md:hidden fixed left-3 right-3 bottom-3 z-header h-14 rounded-xl border backdrop-blur shadow-elev flex items-center justify-between px-4 active:scale-[0.98] transition cursor-pointer ${
+      className={`md:hidden fixed left-3 right-3 bottom-24 z-header h-14 rounded-xl border backdrop-blur shadow-elev flex items-center justify-between px-4 active:scale-[0.98] transition cursor-pointer ${
         isAction
           ? signal.action === 'BUY'
             ? 'bg-buy border-buy text-white'
@@ -23,14 +23,14 @@ export default function MobileSignalButton({ signal, onClick }: Props) {
       }`}
       style={{ marginBottom: 'var(--safe-bottom)' }}
     >
-      <div className="flex items-center gap-2.5">
-        <span className={`w-2 h-2 rounded-full ${isAction ? 'bg-white animate-pulse-soft' : 'bg-fg-dim'}`} />
-        <span className="font-black text-lg">{signal.action}</span>
+      <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isAction ? 'bg-white animate-pulse-soft' : 'bg-fg-dim'}`} />
+        <span className="font-black text-base sm:text-lg">{signal.action}</span>
         <Badge variant={variant} size="sm" className={isAction ? '!bg-white/20 !border-white/30 !text-white' : ''}>{signal.confidence}%</Badge>
       </div>
-      <div className="flex items-center gap-1 text-xs">
-        <span className={`font-mono tabular ${isAction ? 'opacity-95' : 'opacity-80'}`}>{fmtPrice(signal.price)}</span>
-        <Icon.Chevron size={14} />
+      <div className="flex items-center gap-1 text-xs min-w-0">
+        <span className={`font-mono tabular truncate ${isAction ? 'opacity-95' : 'opacity-80'}`}>{fmtPrice(signal.price)}</span>
+        <Icon.Chevron size={14} className="flex-shrink-0" />
       </div>
     </button>
   );

@@ -14,7 +14,7 @@
  */
 
 import { computeDatasetSig, isContextSwitch } from '../components/PriceChart';
-import type { DatasetSig } from '../components/PriceChart';
+import type { ChartContextSig, DatasetSig } from '../components/PriceChart';
 
 const assert = (cond: boolean, msg: string) => {
   if (!cond) { console.error('FAIL:', msg); process.exit(1); }
@@ -23,6 +23,12 @@ const assert = (cond: boolean, msg: string) => {
 
 const HOUR = 3600;
 const MINUTE = 60;
+
+const withCtx = (sig: DatasetSig, symbol = 'BTCUSDT', intervalLabel = '1h'): ChartContextSig => ({
+  ...sig,
+  symbol,
+  intervalLabel,
+});
 
 const testComputeSigFromCandles = () => {
   // 1h candles starting at t0, 500 bars
@@ -46,7 +52,7 @@ const testComputeSigSingleCandle = () => {
 };
 
 const testInitialLoadIsContextSwitch = () => {
-  const sig = computeDatasetSig([1000, 1000 + HOUR, 1000 + 2 * HOUR]) as DatasetSig;
+  const sig = withCtx(computeDatasetSig([1000, 1000 + HOUR, 1000 + 2 * HOUR]) as DatasetSig);
   // First-ever load (no previous signature) must be treated as a context switch
   // so the viewport is fit to the initial dataset.
   assert(isContextSwitch(null, sig) === true, 'initial load (prev=null) is a context switch');
@@ -57,50 +63,50 @@ const testSameContextLiveRefresh = () => {
   // possibly dropped). Last timestamp advances by ~1 bar, interval unchanged.
   const prevTimes = Array.from({ length: 500 }, (_, i) => 1000 + i * HOUR);
   const nextTimes = Array.from({ length: 500 }, (_, i) => 1000 + HOUR + i * HOUR);
-  const prev = computeDatasetSig(prevTimes) as DatasetSig;
-  const next = computeDatasetSig(nextTimes) as DatasetSig;
+  const prev = withCtx(computeDatasetSig(prevTimes) as DatasetSig);
+  const next = withCtx(computeDatasetSig(nextTimes) as DatasetSig);
   assert(isContextSwitch(prev, next) === false, 'live refresh (same interval, last moves forward by ~1 bar) is NOT a context switch');
 };
 
 const testSameContextMultipleBarRefresh = () => {
   // Sometimes the window slides more than 1 bar (e.g. delayed refresh). Up to 20
   // bars should still be treated as a live refresh.
-  const prev = computeDatasetSig([1000, 1000 + HOUR, 1000 + 2 * HOUR]) as DatasetSig;
-  const next = computeDatasetSig([1000 + 10 * HOUR, 1000 + 11 * HOUR, 1000 + 12 * HOUR]) as DatasetSig;
+  const prev = withCtx(computeDatasetSig([1000, 1000 + HOUR, 1000 + 2 * HOUR]) as DatasetSig);
+  const next = withCtx(computeDatasetSig([1000 + 10 * HOUR, 1000 + 11 * HOUR, 1000 + 12 * HOUR]) as DatasetSig);
   assert(isContextSwitch(prev, next) === false, 'live refresh with 10-bar gap is NOT a context switch');
 };
 
 const testTimeframeChangeIsContextSwitch = () => {
   // Same general time range, but interval changed (e.g. 1h -> 15m).
-  const prev = { last: 1000, interval: HOUR } as DatasetSig;
-  const next = { last: 1000, interval: 15 * MINUTE } as DatasetSig;
+  const prev = withCtx({ last: 1000, interval: HOUR }, 'BTCUSDT', '1h');
+  const next = withCtx({ last: 1000, interval: 15 * MINUTE }, 'BTCUSDT', '15m');
   assert(isContextSwitch(prev, next) === true, 'timeframe change (interval differs) is a context switch');
 };
 
 const testPairChangeBackwardJump = () => {
   // Different pair: last candle timestamp goes backwards (e.g. less recent data).
-  const prev = { last: 10000, interval: HOUR } as DatasetSig;
-  const next = { last: 2000, interval: HOUR } as DatasetSig;
+  const prev = withCtx({ last: 10000, interval: HOUR });
+  const next = withCtx({ last: 2000, interval: HOUR }, 'ETHUSDT', '1h');
   assert(isContextSwitch(prev, next) === true, 'pair change (last goes backwards) is a context switch');
 };
 
 const testPairChangeHugeForwardJump = () => {
   // Different pair: last candle timestamp jumps far ahead (>20 bars).
-  const prev = { last: 1000, interval: HOUR } as DatasetSig;
-  const next = { last: 1000 + 100 * HOUR, interval: HOUR } as DatasetSig;
+  const prev = withCtx({ last: 1000, interval: HOUR });
+  const next = withCtx({ last: 1000 + 100 * HOUR, interval: HOUR }, 'ETHUSDT', '1h');
   assert(isContextSwitch(prev, next) === true, 'pair change (last jumps far forward) is a context switch');
 };
 
 const testPairChangeSameIntervalSameLast = () => {
-  // Edge case: different pair but last timestamp happens to be very close.
-  // A small forward gap with same interval is treated as live refresh.
-  const prev = { last: 1000, interval: HOUR } as DatasetSig;
-  const next = { last: 1000 + HOUR, interval: HOUR } as DatasetSig;
-  assert(isContextSwitch(prev, next) === false, 'same interval + 1-bar forward gap is NOT a context switch (live refresh)');
+  // Real production bug: different pair can share the exact same latest candle
+  // timestamp and interval. This MUST still be treated as a context switch.
+  const prev = withCtx({ last: 1000, interval: HOUR }, 'BTCUSDT', '1h');
+  const next = withCtx({ last: 1000, interval: HOUR }, 'ETHUSDT', '1h');
+  assert(isContextSwitch(prev, next) === true, 'different symbol with identical time signature IS a context switch');
 };
 
 const testIdenticalSignatureNotSwitch = () => {
-  const sig = { last: 1000, interval: HOUR } as DatasetSig;
+  const sig = withCtx({ last: 1000, interval: HOUR }, 'BTCUSDT', '1h');
   assert(isContextSwitch(sig, sig) === false, 'identical signature is NOT a context switch');
 };
 

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useKlines } from '../lib/hooks/useKlines';
 import { computeSignal, type SignalAction } from '../lib/signal';
 import { KEY_TIMEFRAMES } from './TimeframeTabs';
@@ -32,14 +32,19 @@ const Row = ({
 }) => {
   const { candles } = useKlines(exchange, symbol, tf, 300);
   const [res, setRes] = useState<{ action: SignalAction | null; score: number | null }>({ action: null, score: null });
+  // Keep latest onResult in a ref so the signal effect can stay scoped to
+  // data dependencies. Without this, every parent render (which creates a
+  // new closure) re-fires the effect; the ref captures the freshest callback
+  // without re-running the (relatively expensive) computeSignal.
+  const onResultRef = useRef(onResult);
+  useEffect(() => { onResultRef.current = onResult; });
   useEffect(() => {
     if (candles.length < 210) return;
     const sig = computeSignal(candles);
     const next = sig ? { action: sig.action, score: sig.score } : { action: null, score: null };
     setRes(next);
-    onResult(next.action, next.score);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candles]);
+    onResultRef.current(next.action, next.score);
+  }, [candles, exchange, symbol]);
   const isActive = tf === activeTf;
   const loading = res.action === null;
   const s = res.action ? ACTION_STYLES[res.action] : null;

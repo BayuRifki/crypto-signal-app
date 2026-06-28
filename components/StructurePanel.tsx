@@ -60,7 +60,7 @@ const ImbalanceView = ({ price, fvgs, obs }: { price: number; fvgs: FVG[]; obs: 
         const inside = price >= f.bottom && price <= f.top;
         return (
           <div key={`f${i}`} className={`flex items-center gap-2 p-2 rounded text-xs ${inside ? 'bg-info/10 ring-1 ring-info/40' : 'bg-bg-elevated'}`}>
-            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${f.type === 'bullish' ? 'bg-buy/20 text-buy' : 'bg-sell/20 text-sell'}`}>
+            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${f.type === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
               FVG
             </span>
             <div className="flex-1 font-mono tabular text-fg">
@@ -76,7 +76,7 @@ const ImbalanceView = ({ price, fvgs, obs }: { price: number; fvgs: FVG[]; obs: 
         const inside = price >= o.bottom && price <= o.top;
         return (
           <div key={`o${i}`} className={`flex items-center gap-2 p-2 rounded text-xs ${inside ? 'bg-info/10 ring-1 ring-info/40' : 'bg-bg-elevated'}`}>
-            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${o.type === 'bullish' ? 'bg-buy/20 text-buy' : 'bg-sell/20 text-sell'}`}>
+            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${o.type === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
               OB
             </span>
             <div className="flex-1 font-mono tabular text-fg">
@@ -98,7 +98,7 @@ const StructureView = ({ signals, sweeps, price }: { signals: MSSignal[]; sweeps
     <div className="space-y-1.5 max-h-64 overflow-y-auto scrollbar-thin">
       {signals.slice(-8).reverse().map((m, i) => (
         <div key={`m${i}`} className="flex items-center gap-2 p-2 rounded bg-bg-elevated text-xs">
-          <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${m.direction === 'bullish' ? 'bg-buy/20 text-buy' : 'bg-sell/20 text-sell'}`}>
+          <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${m.direction === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
             {m.type}
           </span>
           <span className="text-fg-muted capitalize">{m.direction}</span>
@@ -109,7 +109,7 @@ const StructureView = ({ signals, sweeps, price }: { signals: MSSignal[]; sweeps
         const dist = ((price - s.level) / price) * 100;
         return (
           <div key={`s${i}`} className="flex items-center gap-2 p-2 rounded bg-bg-elevated text-xs">
-            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${s.type === 'bullish' ? 'bg-buy/20 text-buy' : 'bg-sell/20 text-sell'}`}>
+            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${s.type === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
               SWEEP
             </span>
             <span className="text-fg-muted capitalize">{s.type}</span>
@@ -124,8 +124,12 @@ const StructureView = ({ signals, sweeps, price }: { signals: MSSignal[]; sweeps
 
 const SRView = ({ price, levels }: { price: number; levels: SRLevel[] }) => {
   if (levels.length === 0) return <EmptyMsg text="No support/resistance levels" />;
-  const supports = levels.filter((l) => l.type === 'support' && l.price < price).sort((a, b) => b.price - a.price).slice(0, 5);
-  const resistances = levels.filter((l) => l.type === 'resistance' && l.price > price).sort((a, b) => a.price - b.price).slice(0, 5);
+  // Include levels exactly at price in BOTH columns: a support level at the
+  // current price is where price is resting, and a resistance at price is
+  // the breakout threshold. Dropping them (strict < / >) silently hides
+  // important confluence zones.
+  const supports = levels.filter((l) => l.type === 'support' && l.price <= price).sort((a, b) => b.price - a.price).slice(0, 5);
+  const resistances = levels.filter((l) => l.type === 'resistance' && l.price >= price).sort((a, b) => a.price - b.price).slice(0, 5);
   return (
     <div className="grid grid-cols-2 gap-2">
       <div>

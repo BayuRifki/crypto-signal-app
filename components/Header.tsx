@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import type { SignalAction } from '../lib/signal';
@@ -7,8 +8,6 @@ import type { Ticker24h } from '../lib/exchanges/types';
 import { fmtPrice } from '../lib/utils';
 
 type Props = {
-  symbol: string;
-  interval: string;
   signal: { action: SignalAction; confidence: number; score: number } | null;
   ticker: Ticker24h | null;
   isLoading: boolean;
@@ -19,9 +18,9 @@ type Props = {
 };
 
 const ACTION_STYLE: Record<SignalAction, { bg: string; text: string; border: string; glow: string; dot: string }> = {
-  BUY: { bg: 'bg-buy/20', text: 'text-buy', border: 'border-buy/40', glow: 'shadow-glow-buy', dot: 'bg-buy' },
-  SELL: { bg: 'bg-sell/20', text: 'text-sell', border: 'border-sell/40', glow: 'shadow-glow-sell', dot: 'bg-sell' },
-  HOLD: { bg: 'bg-hold/20', text: 'text-hold', border: 'border-hold/40', glow: '', dot: 'bg-hold' },
+  BUY: { bg: 'bg-buy-soft', text: 'text-buy', border: 'border-buy', glow: 'glow-buy', dot: 'bg-buy' },
+  SELL: { bg: 'bg-sell-soft', text: 'text-sell', border: 'border-sell', glow: 'glow-sell', dot: 'bg-sell' },
+  HOLD: { bg: 'bg-hold-soft', text: 'text-hold', border: 'border-hold', glow: '', dot: 'bg-hold' },
 };
 
 const fmtVol = (n: number) => {
@@ -32,25 +31,18 @@ const fmtVol = (n: number) => {
 };
 
 const LogoMark = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="text-bg-base">
-    <defs>
-      <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#10b981" />
-        <stop offset="50%" stopColor="#0ea5e9" />
-        <stop offset="100%" stopColor="#8b5cf6" />
-      </linearGradient>
-    </defs>
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <path
-      d="M3 17 L9 11 L13 14 L21 5"
-      stroke="url(#logoGrad)"
-      strokeWidth="2.5"
+      d="M3 16 L8 10 L13 13 L21 4"
+      stroke="#6366F1"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       fill="none"
     />
-    <circle cx="9" cy="11" r="1.5" fill="url(#logoGrad)" />
-    <circle cx="13" cy="14" r="1.5" fill="url(#logoGrad)" />
-    <circle cx="21" cy="5" r="2" fill="url(#logoGrad)" />
+    <circle cx="8" cy="10" r="1.2" fill="#6366F1" />
+    <circle cx="13" cy="13" r="1.2" fill="#6366F1" />
+    <circle cx="21" cy="4" r="1.5" fill="#6366F1" />
   </svg>
 );
 
@@ -58,17 +50,34 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
   const s = signal ? ACTION_STYLE[signal.action] : null;
   const change = ticker?.priceChangePercent ?? null;
   const up = (change ?? 0) >= 0;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 15000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const lastUpdateAge = (() => {
+    if (!lastUpdate) return null;
+    const seconds = Math.max(0, Math.floor((now - lastUpdate.getTime()) / 1000));
+    if (seconds < 5) return 'just now';
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  })();
 
   return (
-    <header className="sticky top-0 z-header backdrop-blur bg-bg-base/85 border-b border-line" style={{ paddingTop: 'var(--safe-top)' }}>
-      <div className="max-w-[1600px] mx-auto px-3 md:px-5 h-14 flex items-center gap-2 md:gap-3">
-        <div className="flex items-center gap-2 mr-1">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-buy via-info to-accent flex items-center justify-center flex-shrink-0">
+    <header className="z-header backdrop-blur bg-bg-panel/95 border-b border-line" style={{ paddingTop: 'var(--safe-top)' }}>
+      <div className="max-w-[1600px] mx-auto px-3 md:px-5 h-14 flex items-center gap-3">
+        <div className="flex items-center gap-2.5 mr-2">
+          <div className="w-8 h-8 rounded-md bg-bg-elevated border border-line flex items-center justify-center flex-shrink-0">
             <LogoMark />
           </div>
           <div className="hidden md:block">
-            <div className="text-sm font-bold text-fg leading-none">Crypto Signal</div>
-            <div className="text-2xs text-fg-dim leading-none mt-0.5">Smart Money Suite</div>
+            <div className="text-sm font-bold text-fg leading-none tracking-tight">AURORA</div>
+            <div className="text-2xs text-fg-dim leading-none mt-0.5 label-caps">Terminal</div>
           </div>
         </div>
 
@@ -76,12 +85,12 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
 
         {ticker && (
           <Tooltip label={`24h volume: ${fmtVol(ticker.quoteVolume)}`}>
-            <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-md bg-bg-elevated border border-line">
-              <span className="text-sm font-mono font-bold tabular text-fg">{fmtPrice(ticker.lastPrice)}</span>
-              <span className={`text-xs font-mono tabular font-bold ${up ? 'text-buy' : 'text-sell'}`}>
+            <div className="hidden md:flex items-center gap-2.5 px-3.5 h-9 rounded-md bg-bg-elevated border border-line">
+              <span className="text-sm mono font-bold text-fg">{fmtPrice(ticker.lastPrice)}</span>
+              <span className={`text-xs mono font-bold ${up ? 'text-info' : 'text-fg-muted'}`}>
                 {up ? '+' : ''}{change!.toFixed(2)}%
               </span>
-              <span className="text-2xs text-fg-dim tabular hidden lg:inline">Vol {fmtVol(ticker.quoteVolume)}</span>
+              <span className="text-2xs text-fg-dim mono tabular hidden lg:inline">Vol {fmtVol(ticker.quoteVolume)}</span>
             </div>
           </Tooltip>
         )}
@@ -90,36 +99,45 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
 
         {signal && s && (
           <Tooltip label={`${signal.action} signal · ${signal.confidence}% confidence · score ${signal.score > 0 ? '+' : ''}${signal.score}`}>
-            <div className={`flex items-center gap-2 px-3 h-9 rounded-md border ${s.bg} ${s.border} ${s.glow} cursor-help transition`}>
-              <span className={`w-2 h-2 rounded-full ${s.dot} animate-pulse-soft`} />
-              <span className={`text-sm font-black ${s.text}`}>{signal.action}</span>
-              <span className={`text-xs font-mono tabular ${s.text} opacity-80`}>{signal.confidence}%</span>
+            <div className={`flex items-center gap-2 px-3 h-9 rounded-md border ${s.bg} ${s.border}/40 cursor-help transition ${signal.action !== 'HOLD' ? s.glow : ''}`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot} animate-pulse-soft`} />
+              <span className={`text-xs font-black tracking-widest text-fg ${s.text}`}>{signal.action}</span>
+              <span className={`w-px h-3 bg-current ${s.border}/30`} aria-hidden="true" />
+              <span className={`text-xs mono tabular ${s.text} opacity-90`}>{signal.confidence}%</span>
             </div>
           </Tooltip>
         )}
         {!signal && !isLoading && <Badge variant="neutral" size="md">NO SIGNAL</Badge>}
         {isLoading && <Badge variant="info" size="md" dot>SCANNING</Badge>}
 
-        <div className="flex items-center gap-1">
-          <Tooltip label={lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Refresh data'}>
-            <button
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              aria-label="Refresh data"
-              className="w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition disabled:opacity-50"
-            >
-              <Icon.Refresh size={16} className={isRefreshing ? 'animate-spin-slow' : ''} />
-            </button>
-          </Tooltip>
-          <Tooltip label="Settings">
-            <button
-              onClick={onOpenSettings}
-              aria-label="Open settings"
-              className="w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:bg-bg-panel transition"
-            >
-              <Icon.Settings size={16} />
-            </button>
-          </Tooltip>
+        <div className="flex items-center gap-2">
+          {lastUpdateAge && !isLoading && (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 h-9 rounded-md bg-bg-elevated border border-line text-2xs text-fg-dim mono tabular">
+              <span className="w-1.5 h-1.5 rounded-full bg-info" />
+              {lastUpdateAge}
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <Tooltip label={lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Refresh data'}>
+              <button
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                aria-label="Refresh data"
+                className="w-9 h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:text-fg transition disabled:opacity-50"
+              >
+                <Icon.Refresh size={15} className={`transition-transform ${isRefreshing ? 'animate-spin-slow' : ''}`} />
+              </button>
+            </Tooltip>
+            <Tooltip label="Settings">
+              <button
+                onClick={onOpenSettings}
+                aria-label="Open settings"
+                className="w-9 h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:text-fg transition"
+              >
+                <Icon.Settings size={15} />
+              </button>
+            </Tooltip>
+          </div>
         </div>
       </div>
     </header>

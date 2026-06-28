@@ -24,7 +24,7 @@ export default function Toggle({ checked, onChange, label, description, icon }: 
         aria-label={`Toggle ${label}`}
         onClick={(e) => { e.preventDefault(); onChange(!checked); }}
         className={`relative w-10 h-6 rounded-full transition flex-shrink-0 cursor-pointer ${
-          checked ? 'bg-buy' : 'bg-bg-hover border border-line-strong'
+          checked ? 'bg-accent' : 'bg-bg-hover border border-line-strong'
         }`}
       >
         <span

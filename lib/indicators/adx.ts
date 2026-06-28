@@ -57,18 +57,21 @@ export const adx = (candles: Candle[], period = 14): ADXPoint[] => {
     out[i] = { adx: null, pdi, ndi };
   }
 
-  let prevAdx: number | null = null;
-  for (let i = period; i < len; i++) {
-    if (i < period * 2 - 1) continue;
-    if (prevAdx === null) {
-      const slice = dx.slice(period, i + 1);
-      if (slice.length === 0) continue;
-      prevAdx = slice.reduce((a, b) => a + b, 0) / slice.length;
-      out[i] = { ...out[i], adx: prevAdx };
-    } else {
-      prevAdx = (prevAdx * (period - 1) + dx[i]) / period;
-      out[i] = { ...out[i], adx: prevAdx };
-    }
+  // Seed prevAdx with the simple average of the first `period` DX values
+  // (i.e. the SMA at index `period*2 - 1`, the first valid ADX bar). Doing
+  // this once outside the hot loop avoids an O(period) slice + reduce on
+  // every iteration, which previously made the first ADX bar O(n) instead
+  // of O(1) inside the loop.
+  const seedEnd = period * 2 - 1;
+  let prevAdx: number = seedEnd < len
+    ? dx.slice(period, seedEnd + 1).reduce((a, b) => a + b, 0) / period
+    : 0;
+  if (seedEnd < len) {
+    out[seedEnd] = { ...out[seedEnd], adx: prevAdx };
+  }
+  for (let i = seedEnd + 1; i < len; i++) {
+    prevAdx = (prevAdx * (period - 1) + dx[i]) / period;
+    out[i] = { ...out[i], adx: prevAdx };
   }
 
   return out;

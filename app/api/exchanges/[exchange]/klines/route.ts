@@ -77,7 +77,7 @@ export async function GET(req: NextRequest, ctx: { params: { exchange: string } 
       }
     }
     return NextResponse.json(
-      { error: errorMsg, exchangeId: exId, symbol, interval },
+      { error: errorMsg, code: 'UPSTREAM_FAILED', exchangeId: exId, symbol, interval },
       { status: 502 }
     );
   }

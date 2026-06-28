@@ -66,7 +66,7 @@ export default function DemoToggle({ isDemo, preset, onToggle, onPresetChange, r
               onClick={() => { onToggle(false); setOpen(false); }}
               className={`h-9 px-2 rounded text-xs font-bold border transition ${
                 !isDemo
-                  ? 'bg-buy/15 border-buy/40 text-buy'
+                  ? 'bg-accent/15 border-accent/40 text-accent'
                   : 'bg-bg-elevated border-line text-fg-muted hover:border-line-strong hover:text-fg'
               }`}
             >

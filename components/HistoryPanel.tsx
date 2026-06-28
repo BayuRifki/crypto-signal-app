@@ -24,6 +24,7 @@ export default function HistoryPanel({ symbol, interval }: Props) {
   const [entries, setEntries] = useState<SignalHistoryEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'symbol'>('all');
   const [confirming, setConfirming] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(50);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -40,6 +41,11 @@ export default function HistoryPanel({ symbol, interval }: Props) {
   const filtered = filter === 'symbol' && symbol
     ? entries.filter((e) => e.symbol === symbol && (!interval || e.interval === interval))
     : entries;
+  const visibleEntries = filtered.slice(0, visibleCount);
+
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [filter, symbol, interval, entries.length]);
 
   const handleClear = () => {
     clearSignalHistory();
@@ -109,7 +115,7 @@ export default function HistoryPanel({ symbol, interval }: Props) {
               </button>
               <button
                 onClick={() => setConfirming(true)}
-                className="h-7 px-2 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-sell/40 hover:text-sell transition cursor-pointer"
+                className="h-7 px-2 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-warn/40 hover:text-warn transition cursor-pointer"
                 title="Clear history"
               >
                 Clear
@@ -135,7 +141,7 @@ export default function HistoryPanel({ symbol, interval }: Props) {
             <button
               ref={confirmRef}
               onClick={handleClear}
-              className="h-8 px-3 text-2xs rounded bg-sell/20 border border-sell/50 text-sell hover:bg-sell/30 font-bold transition cursor-pointer"
+              className="h-8 px-3 text-2xs rounded bg-warn/20 border border-warn/50 text-warn hover:bg-warn/30 font-bold transition cursor-pointer"
             >
               Delete
             </button>
@@ -149,7 +155,7 @@ export default function HistoryPanel({ symbol, interval }: Props) {
         </div>
       ) : (
         <div className="max-h-96 overflow-y-auto space-y-1.5 -mx-1 px-1">
-          {filtered.slice(0, 50).map((e) => {
+          {visibleEntries.map((e) => {
             const slPct = e.action === 'SELL' ? ((e.sl - e.price) / e.price) * 100 : ((e.price - e.sl) / e.price) * 100;
             const tpPct = e.action === 'SELL' ? ((e.price - e.tp) / e.price) * 100 : ((e.tp - e.price) / e.price) * 100;
             return (
@@ -172,11 +178,11 @@ export default function HistoryPanel({ symbol, interval }: Props) {
                   </div>
                   <div>
                     <div className="text-fg-dim">SL ({e.slSource})</div>
-                    <div className="font-mono tabular text-sell">{slPct.toFixed(2)}%</div>
+                    <div className="font-mono tabular text-warn">{slPct.toFixed(2)}%</div>
                   </div>
                   <div>
                     <div className="text-fg-dim">TP ({e.tpSource})</div>
-                    <div className="font-mono tabular text-buy">{tpPct.toFixed(2)}%</div>
+                    <div className="font-mono tabular text-info">{tpPct.toFixed(2)}%</div>
                   </div>
                   <div>
                     <div className="text-fg-dim">Conf</div>
@@ -188,8 +194,12 @@ export default function HistoryPanel({ symbol, interval }: Props) {
                   </div>
                 </div>
                 {e.reasons.length > 0 && (
-                  <div className="text-2xs text-fg-dim mt-1.5 leading-relaxed truncate" title={e.reasons.join(' · ')}>
+                  <div
+                    className="text-2xs text-fg-dim mt-1.5 leading-relaxed md:truncate md:[mask-image:linear-gradient(to_right,black_70%,transparent)]"
+                    title={e.reasons.join(' · ')}
+                  >
                     {e.reasons.slice(0, 3).join(' · ')}
+                    {e.reasons.length > 3 && <span className="text-fg-dim/60"> · +{e.reasons.length - 3} more</span>}
                   </div>
                 )}
               </div>
@@ -198,11 +208,20 @@ export default function HistoryPanel({ symbol, interval }: Props) {
         </div>
       )}
 
-      {filtered.length > 50 && (
-          <div className="text-2xs text-fg-dim text-center pt-1">
-            Showing 50 of {filtered.length} entries. Export CSV for full data.
+      {filtered.length > visibleCount && (
+        <div className="flex flex-col items-center gap-2 pt-1">
+          <div className="text-2xs text-fg-dim text-center">
+            Showing {visibleEntries.length} of {filtered.length} entries.
           </div>
-        )}
+          <button
+            type="button"
+            onClick={() => setVisibleCount((v) => Math.min(v + 50, filtered.length))}
+            className="h-8 px-3 text-2xs rounded bg-bg-elevated border border-line text-fg-muted hover:border-line-strong hover:text-fg transition cursor-pointer"
+          >
+            Load 50 more
+          </button>
+        </div>
+      )}
 
       <div className="text-2xs text-fg-dim leading-relaxed border-t border-line pt-2">
         Signals are auto-logged when action or score changes. Max 200 entries kept in localStorage.

@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import Tooltip from './Tooltip';
 import type { Signal, SignalComponents } from '../lib/signal';
@@ -34,17 +35,23 @@ const CategoryBar = ({ value, max }: { value: number; max: number }) => {
 };
 
 export default function SignalCard({ signal }: Props) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [signal]);
+
   if (!signal) {
     return (
       <div className="card p-5">
         <div className="flex items-center gap-2 text-sm text-fg-dim">
           <div className="w-2 h-2 rounded-full bg-info animate-pulse-soft" />
-          Computing signal…
+          <span className="label-caps text-xs">Computing signal</span>
         </div>
         <div className="mt-4 space-y-2">
-          <div className="shimmer h-12 rounded" />
-          <div className="shimmer h-3 rounded w-2/3" />
-          <div className="shimmer h-3 rounded w-1/2" />
+          <div className="shimmer h-12 rounded-md" />
+          <div className="shimmer h-3 rounded-md w-2/3" />
+          <div className="shimmer h-3 rounded-md w-1/2" />
         </div>
       </div>
     );
@@ -52,15 +59,21 @@ export default function SignalCard({ signal }: Props) {
 
   const action = signal.action;
   const actionMeta = {
-    BUY: { color: 'text-buy', bg: 'bg-buy/10', border: 'border-buy/30', glow: 'shadow-glow-buy', icon: <Icon.TrendUp size={20} />, advice: 'Look for long entries. Confirm with multi-TF alignment.' },
-    SELL: { color: 'text-sell', bg: 'bg-sell/10', border: 'border-sell/30', glow: 'shadow-glow-sell', icon: <Icon.TrendDown size={20} />, advice: 'Consider short or trim positions. Wait for confirmation.' },
-    HOLD: { color: 'text-hold', bg: 'bg-hold/10', border: 'border-hold/30', glow: '', icon: <Icon.Clock size={20} />, advice: 'No clear edge. Wait for stronger confluence.' },
+    BUY: { color: 'text-buy', bg: 'bg-buy-soft', border: 'border-buy/30', glow: 'glow-buy', icon: <Icon.TrendUp size={20} />, advice: 'Look for long entries. Confirm with multi-TF alignment.' },
+    SELL: { color: 'text-sell', bg: 'bg-sell-soft', border: 'border-sell/30', glow: 'glow-sell', icon: <Icon.TrendDown size={20} />, advice: 'Consider short or trim positions. Wait for confirmation.' },
+    HOLD: { color: 'text-hold', bg: 'bg-hold-soft', border: 'border-hold/30', glow: '', icon: <Icon.Clock size={20} />, advice: 'No clear edge. Wait for stronger confluence.' },
   }[action];
 
-  const confidenceColor = signal.confidence >= 70 ? 'text-buy' : signal.confidence >= 40 ? 'text-warn' : 'text-fg-muted';
-  const topReasons = signal.reasons.slice(0, 4);
+  const confidenceColor = signal.confidence >= 70
+    ? 'text-buy'
+    : signal.confidence >= 40
+      ? 'text-warn'
+      : signal.confidence >= 20
+        ? 'text-fg-muted'
+        : 'text-sell';
+  const topReasons = expanded ? signal.reasons : signal.reasons.slice(0, 4);
   const regimeLabel = signal.adx === null ? '—' : signal.regime === 'ranging' ? 'RANGING' : signal.regime === 'trending' ? `TREND ${signal.regimeBias === 'bullish' ? '↑' : signal.regimeBias === 'bearish' ? '↓' : '·'}` : 'TRANSITION';
-  const regimeColor = signal.regime === 'ranging' ? 'bg-warn/15 text-warn border-warn/30' : signal.regime === 'trending' ? 'bg-info/15 text-info border-info/30' : 'bg-bg-panel text-fg-muted border-line';
+  const regimeColor = signal.regime === 'ranging' ? 'bg-warn-soft text-warn border-warn/30' : signal.regime === 'trending' ? 'bg-info-soft text-info border-info/30' : 'bg-bg-panel text-fg-muted border-line';
   const hasDiv = signal.rsiDivergence || signal.macdDivergence;
   const hasPoc = signal.pocNear;
 
@@ -69,19 +82,19 @@ export default function SignalCard({ signal }: Props) {
       <div className={`${actionMeta.bg} p-5 border-b ${actionMeta.border}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 text-2xs text-fg-dim uppercase tracking-wider font-bold mb-1.5">
+            <div className="flex items-center gap-2 text-2xs text-fg-dim label-caps mb-1.5">
               <Icon.Zap size={12} />
               <span>Signal</span>
-              <span className={`ml-1 px-1.5 py-0.5 rounded text-2xs font-bold border ${regimeColor}`}>{regimeLabel}</span>
+              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-2xs font-bold border ${regimeColor}`}>{regimeLabel}</span>
               {hasDiv && (
-                <span className="px-1.5 py-0.5 rounded text-2xs font-bold border bg-accent/15 text-accent border-accent/30">DIV</span>
+                <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold border bg-sell-soft text-sell border-sell/30">DIV</span>
               )}
               {hasPoc && (
-                <span className="px-1.5 py-0.5 rounded text-2xs font-bold border bg-info/15 text-info border-info/30">POC</span>
+                <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold border bg-info-soft text-info border-info/30">POC</span>
               )}
               {signal.degraded && (
                 <span
-                  className="px-1.5 py-0.5 rounded text-2xs font-bold border bg-warn/15 text-warn border-warn/30"
+                  className="px-1.5 py-0.5 rounded-full text-2xs font-bold border bg-warn-soft text-warn border-warn/30"
                   title={`Degraded: ${signal.degradedIndicators.length} indicator(s) failed — ${signal.degradedIndicators.slice(0, 5).join(', ')}`}
                 >
                   DEG · {signal.degradedIndicators.length}
@@ -92,23 +105,23 @@ export default function SignalCard({ signal }: Props) {
               {actionMeta.icon}
               <span className="text-3xl font-black tracking-tight">{action}</span>
             </div>
-            <div className="text-2xs text-fg-dim mt-1.5 leading-relaxed">{actionMeta.advice}</div>
+            <div className="text-xs text-fg-muted mt-1.5 leading-relaxed">{actionMeta.advice}</div>
           </div>
           <div className="text-right">
-            <div className="text-2xs text-fg-dim uppercase tracking-wider font-bold">Confidence</div>
-            <div className={`text-2xl font-black tabular ${confidenceColor}`}>{signal.confidence}%</div>
+            <div className="label-caps">Confidence</div>
+            <div className={`text-2xl font-black mono font-bold mt-1 ${confidenceColor}`}>{signal.confidence}%</div>
           </div>
         </div>
 
         <div className="mt-4">
-          <div className="flex justify-between text-2xs text-fg-dim mb-1">
+          <div className="flex justify-between text-2xs text-fg-dim mb-1 label-caps">
             <span>Score</span>
-            <span className="font-mono tabular text-fg">{signal.score > 0 ? '+' : ''}{signal.score} / 100</span>
+            <span className="mono text-fg">{signal.score > 0 ? '+' : ''}{signal.score} / 100</span>
           </div>
           <div className="h-2 bg-bg-base rounded-full relative overflow-hidden">
             <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line-strong" />
             <div
-              className={`absolute top-0 bottom-0 ${signal.score >= 0 ? 'bg-gradient-to-r from-buy/70 to-buy' : 'bg-gradient-to-l from-sell/70 to-sell'} rounded-full`}
+              className={`absolute top-0 bottom-0 ${signal.score >= 0 ? 'bg-buy' : 'bg-sell'} rounded-full`}
               style={{
                 width: `${Math.abs(signal.score) / 2}%`,
                 ...(signal.score >= 0 ? { left: '50%' } : { right: '50%' }),
@@ -121,8 +134,8 @@ export default function SignalCard({ signal }: Props) {
       <div className="p-5 space-y-5">
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-2xs text-fg-dim uppercase tracking-wider font-bold">Category Breakdown</div>
-            <div className="text-2xs text-fg-dim">3 groups</div>
+            <div className="label-caps">Category Breakdown</div>
+            <div className="text-2xs text-fg-dim label-caps">3 groups</div>
           </div>
           <div className="space-y-2.5">
             {GROUPS.map((g) => {
@@ -135,7 +148,7 @@ export default function SignalCard({ signal }: Props) {
                       <span className="font-semibold">{g.label}</span>
                       <span className="text-fg-dim">· {g.keys.length}</span>
                     </div>
-                    <span className={`text-xs font-mono font-bold tabular ${total > 0 ? 'text-buy' : total < 0 ? 'text-sell' : 'text-fg-dim'}`}>
+                    <span className={`text-xs mono tabular font-bold ${total > 0 ? 'text-buy' : total < 0 ? 'text-sell' : 'text-fg-dim'}`}>
                       {total > 0 ? '+' : ''}{total}
                     </span>
                   </div>
@@ -148,21 +161,33 @@ export default function SignalCard({ signal }: Props) {
 
         {topReasons.length > 0 && (
           <div>
-            <div className="text-2xs text-fg-dim uppercase tracking-wider font-bold mb-2">Why</div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="label-caps">Why</div>
+              {signal.reasons.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="text-2xs text-info hover:text-fg transition label-caps"
+                  aria-expanded={expanded}
+                >
+                  {expanded ? 'Less' : `All (${signal.reasons.length})`}
+                </button>
+              )}
+            </div>
             <ul className="space-y-1">
               {topReasons.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-fg-muted">
+                <li key={i} className="flex items-start gap-2 text-xs text-fg-muted leading-relaxed">
                   <span className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${signal.score >= 0 ? 'bg-buy' : signal.score <= -1 ? 'bg-sell' : 'bg-hold'}`} />
-                  <span className="leading-relaxed">{r}</span>
+                  <span>{r}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t border-line text-2xs text-fg-dim">
-          <span>Entry ref</span>
-          <span className="font-mono tabular text-fg font-bold">{fmtPrice(signal.price)}</span>
+        <div className="flex items-center justify-between pt-2 border-t border-line">
+          <span className="label-caps">Entry ref</span>
+          <span className="mono text-fg font-bold">{fmtPrice(signal.price)}</span>
         </div>
       </div>
     </div>

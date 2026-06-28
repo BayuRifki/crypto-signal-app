@@ -15,10 +15,16 @@ export const useSignal = (
 
   useEffect(() => {
     if (sig && symbol && interval) {
-      if (!prevSigRef.current || prevSigRef.current.action !== sig.action || prevSigRef.current.score !== sig.score) {
+      const prev = prevSigRef.current;
+      if (
+        !prev ||
+        prev.action !== sig.action ||
+        prev.score !== sig.score ||
+        prev.confidence !== sig.confidence
+      ) {
         logSignal(symbol, interval, sig);
+        prevSigRef.current = sig;
       }
-      prevSigRef.current = sig;
     }
   }, [sig, symbol, interval]);
 

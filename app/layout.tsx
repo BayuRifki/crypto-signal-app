@@ -2,15 +2,15 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Crypto Signal — BB · RSI · MACD · FVG',
-  description: 'Real-time crypto trading signal analyzer with multi-timeframe alignment',
-  applicationName: 'Crypto Signal',
+  title: 'Aurora Terminal - Crypto Signals',
+  description: 'Precision crypto signal analysis with neon clarity',
+  applicationName: 'Aurora Terminal',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Crypto Signal' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Aurora Terminal' },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0b0f17',
+  themeColor: '#0A0E1A',
   width: 'device-width',
   initialScale: 1,
 };
@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="font-sans min-h-screen antialiased">{children}</body>
     </html>
   );
 }

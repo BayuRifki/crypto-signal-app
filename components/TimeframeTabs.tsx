@@ -29,7 +29,12 @@ export default function TimeframeTabs({ value, onChange }: Props) {
   };
 
   return (
-    <div role="radiogroup" aria-label="Timeframe" className="flex bg-bg-elevated border border-line rounded-md p-0.5 overflow-x-auto scrollbar-none">
+    <div
+      role="radiogroup"
+      aria-label="Timeframe"
+      className="flex bg-bg-elevated border border-line rounded-md p-0.5 overflow-x-auto scrollbar-none
+                 [mask-image:linear-gradient(to_right,transparent_0,black_12px,black_calc(100%-12px),transparent_100%)]"
+    >
       {TFS.map((tf) => {
         const active = tf.value === value;
         return (

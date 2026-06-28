@@ -19,7 +19,10 @@ const writeDemoFlag = (v: boolean) => {
 };
 
 const klinesFetcher = async (key: string): Promise<FallbackResult<Candle[]>> => {
-  const [exchange, symbol, interval, limit] = key.split('|') as [ExchangeId, string, Interval, string];
+  if (!key || typeof key !== 'string') {
+    throw new Error('Invalid SWR key');
+  }
+  const [, exchange, symbol, interval, limit] = key.split('|') as [string, ExchangeId, string, Interval, string];
   const lim = Number(limit);
   try {
     return await getKlinesWithFallback(symbol, interval, lim, exchange);
@@ -42,7 +45,7 @@ export const useCandleSource = (exchange: ExchangeId, symbol: string, interval: 
     setDemoModeState(v);
   }, []);
 
-  const swrKey: Key = demoMode ? null : `${exchange}|${symbol}|${interval}|${limit}`;
+  const swrKey: Key = demoMode ? null : `klines|${exchange}|${symbol}|${interval}|${limit}`;
   const { data, error, isLoading, mutate } = useSWR<FallbackResult<Candle[]>>(swrKey, klinesFetcher, {
     refreshInterval: 30000,
     revalidateOnFocus: false,

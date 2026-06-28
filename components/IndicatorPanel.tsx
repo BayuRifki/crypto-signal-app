@@ -83,14 +83,14 @@ export default function IndicatorPanel({ signal }: Props) {
   }
 
   const rsi = signal.rsiValue;
-  const rsiColor = rsi === null ? 'var(--color-fg-muted)' : rsi > 70 ? '#ef4444' : rsi < 30 ? 'var(--color-buy)' : 'var(--color-info)';
-  const rsiZones = [{ from: 0, to: 30, color: 'var(--color-buy)' }, { from: 70, to: 100, color: '#ef4444' }];
+  const rsiColor = rsi === null ? 'var(--color-fg-muted)' : rsi > 70 ? 'var(--color-warn)' : rsi < 30 ? 'var(--color-accent)' : 'var(--color-info)';
+  const rsiZones = [{ from: 0, to: 30, color: 'var(--color-accent)' }, { from: 70, to: 100, color: 'var(--color-warn)' }];
 
   const bb = signal.bbPos;
-  const bbColor = bb === null ? 'var(--color-fg-muted)' : bb < 20 ? 'var(--color-buy)' : bb > 80 ? '#ef4444' : 'var(--color-info)';
+  const bbColor = bb === null ? 'var(--color-fg-muted)' : bb < 20 ? 'var(--color-accent)' : bb > 80 ? 'var(--color-warn)' : 'var(--color-info)';
   const macdHist = signal.macdHist;
-  const macdColor = (macdHist ?? 0) > 0 ? 'var(--color-buy)' : '#ef4444';
-  const cvdColor = signal.cvdSlope >= 0 ? 'var(--color-buy)' : '#ef4444';
+  const macdColor = (macdHist ?? 0) > 0 ? 'var(--color-info)' : 'var(--color-warn)';
+  const cvdColor = signal.cvdSlope >= 0 ? 'var(--color-info)' : 'var(--color-warn)';
   const rvol = signal.rvol;
   const rvolColor = (rvol ?? 0) >= 1.5 ? 'var(--color-buy)' : (rvol ?? 0) < 0.7 ? 'var(--color-warn)' : 'var(--color-hold)';
 
@@ -109,6 +109,13 @@ export default function IndicatorPanel({ signal }: Props) {
           hint={rsi === null ? 'Waiting' : rsi > 70 ? 'Overbought' : rsi < 30 ? 'Oversold' : 'Neutral'}
         >
           <Bar pct={rsi ?? 0} color={rsiColor} zones={rsiZones} />
+          <div className="flex justify-between text-[9px] text-fg-dim/70 tabular mt-0.5 px-px" aria-hidden="true">
+            <span>0</span>
+            <span>30</span>
+            <span>50</span>
+            <span>70</span>
+            <span>100</span>
+          </div>
         </Metric>
 
         <Metric
@@ -159,7 +166,7 @@ export default function IndicatorPanel({ signal }: Props) {
           <span className="text-fg-dim cursor-help">ADX (14)</span>
         </Tooltip>
         <span className="font-mono font-bold tabular">
-              <span style={{ color: signal.adx === null ? 'var(--color-fg-muted)' : signal.adx >= 25 ? 'var(--color-buy)' : signal.adx < 20 ? 'var(--color-warn)' : 'var(--color-hold)' }}>
+              <span style={{ color: signal.adx === null ? 'var(--color-fg-muted)' : signal.adx >= 25 ? 'var(--color-accent)' : signal.adx < 20 ? 'var(--color-warn)' : 'var(--color-hold)' }}>
             {signal.adx === null ? '-' : signal.adx.toFixed(0)}
           </span>
           {signal.adx !== null && (

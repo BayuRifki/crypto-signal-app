@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "fermentId": "019efd0d-ef8e-7610-96cb-24e1c64aa0f5",
+  "phaseId": "phase-2",
+  "phaseName": "Terminal Layout",
+  "attempt": 1,
+  "timestamp": "2026-06-25T07:27:20.658Z",
+  "goal": "Menyusun ulang halaman menjadi layout terminal profesional dengan sidebar, chart toolbar, panel kanan, dan bottom tab bar.",
+  "summary": "Phase 2 completed: terminal layout implemented. Added WatchlistSidebar, ChartToolbar, BottomTabBar; refactored app/page.tsx into top bar + left sidebar + center chart/bottom tabs + right signal panel; neutralized non-signal colors across 13 components; adjusted mobile bottom padding. Production build, typecheck, and lint all pass.",
+  "stepSummaries": "  1. Create `components/WatchlistSidebar.tsx` showing popular + recent pairs and clicking selects symbol. [verified]\n  2. Create `components/ChartToolbar.tsx` with overlay toggles (BB/EMA/FVG/OB/S/R/MS) and timeframe selector, wired to existing hooks. [verified]\n  3. Create `components/BottomTabBar.tsx` dense terminal-style tab bar for Structure/Backtest/Weight Lab/History; preserve ARIA tab/tabpanel linkages. [verified]\n  4. Refactor `app/page.tsx` into terminal layout: top header, left sidebar, main chart + toolbar, right signal panel, bottom tabs. Keep mobile drawer. [verified]\n  5. Adjust non-signal color usage across `Header.tsx`, `KPIStrip.tsx`, `PriceChart.tsx`, `StructurePanel.tsx`, `BacktestPanel.tsx`, `IndicatorPanel.tsx`, `RiskCard.tsx`, `HistoryPanel.tsx`, `WeightLabPanel.tsx`, `Toggle.tsx`, `DemoToggle.tsx`, `IndicatorSettings.tsx`, `PairSelector.tsx` to neutral/accent tokens. [verified]\n  6. Reposition `MobileSignalButton` and update page padding so it does not overlap the new bottom tab bar. [verified]",
+  "diffAvailable": true,
+  "diffFilesChanged": " app/api/exchanges/[exchange]/klines/route.ts |    2 +-\n app/api/exchanges/[exchange]/ticker/route.ts |    2 +-\n app/globals.css                              |  159 +++-\n app/layout.tsx                               |   12 +-\n app/page.tsx                                 |  345 ++++----\n components/BacktestPanel.tsx                 |  746 ++++++++--------\n components/DemoToggle.tsx                    |    2 +-\n components/Header.tsx                        |  122 +--\n components/HistoryPanel.tsx                  |  445 +++++-----\n components/IndicatorPanel.tsx                |   19 +-\n components/IndicatorSettings.tsx             |   21 +-\n components/KPIStrip.tsx                      |   12 +-\n components/MobileSignalButton.tsx            |   12 +-\n components/MultiTimeframeRow.tsx             |  249 +++---\n components/PairSelector.tsx                  |  689 +++++++--------\n components/PriceChart.tsx                    |  607 ++++++-------\n components/RiskCard.tsx                      |   16 +-\n components/SignalCard.tsx                    |   85 +-\n components/StructurePanel.tsx                |   16 +-\n components/TimeframeTabs.tsx                 |    7 +-\n[... 18 more files ...]\n 37 files changed, 3154 insertions(+), 2723 deletions(-)",
+  "flags": [],
+  "derivedGrade": "A",
+  "reviewerRationale": "All gates pass; project checks validate.",
+  "gateVerdicts": [
+    {
+      "id": "F1",
+      "verdict": "pass",
+      "rationale": "Each step had real verification: component creation used `tsc --noEmit` and grep; page refactor used `tsc --noEmit` and `eslint`; color pass used `tsc`, `eslint`, and grep; mobile padding used `tsc`, `eslint`, and grep. Additionally, `npm run build` succeeded, exercising the full Next.js compile/pagelayout/static generation pipeline.",
+      "evidence": "Step 1/2/3: typecheck passed. Step 4: typecheck + lint passed. Step 5: typecheck + lint + grep passed. Step 6: typecheck + lint + grep passed. `npm run build` succeeded (Next.js 14.2.35)."
+    },
+    {
+      "id": "F2",
+      "verdict": "pass",
+      "rationale": "The phase goal was a terminal layout with sidebar, chart toolbar, right panel, bottom tabs, and neutral component colors. All pieces exist and are wired in app/page.tsx; the production build confirms the layout compiles and prerenders.",
+      "evidence": "Files created: components/WatchlistSidebar.tsx, components/ChartToolbar.tsx, components/BottomTabBar.tsx; app/page.tsx refactored; 13 components updated for neutral colors; build output shows / route 188 kB."
+    },
+    {
+      "id": "F3",
+      "verdict": "pass",
+      "rationale": "Nothing deferred in this phase. Remaining work (test/e2e updates and final visual QA) is explicitly Phase 3.",
+      "evidence": "Phase 3 plan covers Playwright/a11y test updates and full suite verification."
+    }
+  ],
+  "projectChecks": {
+    "discovered": true,
+    "anyFailed": false,
+    "commands": [
+      {
+        "kind": "test",
+        "command": "npm test",
+        "exitCode": 0,
+        "durationMs": 0,
+        "timedOut": false
+      },
+      {
+        "kind": "lint",
+        "command": "npm run lint",
+        "exitCode": 0,
+        "durationMs": 4,
+        "timedOut": false
+      },
+      {
+        "kind": "typecheck",
+        "command": "npm run typecheck",
+        "exitCode": 0,
+        "durationMs": 4,
+        "timedOut": false
+      }
+    ]
+  }
+}

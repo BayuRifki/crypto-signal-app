@@ -41,12 +41,17 @@ export const logSignal = (symbol: string, interval: string, sig: Signal): void =
       tpSource: sig.risk.tpSource,
       reasons: sig.reasons,
     };
-    if (arr.length > 0) {
-      const prev = arr[0];
-      if (prev.symbol === entry.symbol && prev.interval === entry.interval && prev.action === entry.action && Math.abs(prev.score - entry.score) < 3 && Math.abs(prev.confidence - entry.confidence) < 5) {
-        return;
-      }
+  for (const e of arr) {
+    if (e.symbol !== entry.symbol || e.interval !== entry.interval) continue;
+    if (
+      e.action === entry.action &&
+      Math.abs(e.score - entry.score) < 3 &&
+      Math.abs(e.confidence - entry.confidence) < 5
+    ) {
+      return;
     }
+    break;
+  }
     arr.unshift(entry);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.slice(0, MAX_ENTRIES)));
   } catch {}

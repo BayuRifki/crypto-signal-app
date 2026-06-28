@@ -31,26 +31,26 @@ export default function KPIStrip({ signal, ticker }: Props) {
       label: 'Price',
       value: ticker ? fmtPrice(ticker.lastPrice) : signal ? fmtPrice(signal.price) : '-',
       sub: change !== null ? `${change >= 0 ? '+' : ''}${change.toFixed(2)}% 24h` : 'Live',
-      color: change !== null ? (change >= 0 ? 'text-buy' : 'text-sell') : 'text-fg',
+      color: change !== null ? (change >= 0 ? 'text-info' : 'text-fg-muted') : 'text-fg',
       icon: change !== null ? (change >= 0 ? <Icon.TrendUp size={13} /> : <Icon.TrendDown size={13} />) : null,
     },
     {
       label: 'RSI',
       value: rsi !== null ? rsi.toFixed(0) : '-',
       sub: rsiState === 'buy' ? 'Oversold' : rsiState === 'sell' ? 'Overbought' : 'Neutral',
-      color: rsiState === 'buy' ? 'text-buy' : rsiState === 'sell' ? 'text-sell' : 'text-fg-muted',
+      color: rsiState === 'buy' ? 'text-accent' : rsiState === 'sell' ? 'text-warn' : 'text-fg-muted',
     },
     {
       label: 'MACD',
       value: macdHist !== null ? (macdHist > 0 ? 'Bull' : 'Bear') : '-',
       sub: macdHist !== null ? `Hist ${macdHist > 0 ? '+' : ''}${macdHist.toFixed(2)}` : 'No data',
-      color: macdState === 'buy' ? 'text-buy' : macdState === 'sell' ? 'text-sell' : 'text-fg-muted',
+      color: macdState === 'buy' ? 'text-info' : macdState === 'sell' ? 'text-warn' : 'text-fg-muted',
     },
     {
       label: 'EMA Trend',
       value: emaTrend === 'buy' ? 'Bullish' : emaTrend === 'sell' ? 'Bearish' : 'Neutral',
       sub: '50 / 200',
-      color: emaTrend === 'buy' ? 'text-buy' : emaTrend === 'sell' ? 'text-sell' : 'text-fg-muted',
+      color: emaTrend === 'buy' ? 'text-info' : emaTrend === 'sell' ? 'text-warn' : 'text-fg-muted',
     },
   ];
 
@@ -60,11 +60,11 @@ export default function KPIStrip({ signal, ticker }: Props) {
         {items.map((it, i) => (
           <Tooltip key={i} label={`${it.label}: ${it.value}`}>
             <div className={`p-3 md:p-4 cursor-help hover:bg-bg-panel transition ${i >= 2 ? 'border-t border-line md:border-t-0' : ''}`}>
-              <div className="flex items-center gap-1.5 text-2xs text-fg-dim uppercase tracking-wider font-semibold">
+              <div className="label-caps font-semibold flex items-center gap-1.5">
                 {it.icon}
                 <span>{it.label}</span>
               </div>
-              <div className={`text-xl md:text-2xl font-bold tabular mt-1 ${it.color}`}>{it.value}</div>
+              <div className={`text-xl md:text-2xl font-bold mono mt-1 font-bold ${it.color}`}>{it.value}</div>
               <div className="text-2xs text-fg-dim mt-0.5 truncate">{it.sub}</div>
             </div>
           </Tooltip>

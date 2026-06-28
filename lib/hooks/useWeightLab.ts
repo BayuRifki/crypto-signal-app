@@ -1,11 +1,12 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_WEIGHTS,
   type SignalWeights,
 } from '../signal';
 import {
   optimizeWeights,
+  type Individual,
   type OptimizerDataset,
   type OptimizationResult,
   type OptimizerConfig,
@@ -39,12 +40,22 @@ const DEFAULT_CONFIG: Partial<OptimizerConfig> = {
   mutationStrength: 0.15,
 };
 
+// Bump when DEFAULT_WEIGHTS shape changes (added/removed weight key) so
+// legacy saved presets can be migrated or discarded cleanly.
+const STORAGE_SCHEMA_VERSION = 1;
+
 const loadSaved = (): { weights: SignalWeights; savedAt: number | null } => {
   if (typeof window === 'undefined') return { weights: { ...DEFAULT_WEIGHTS }, savedAt: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { weights: { ...DEFAULT_WEIGHTS }, savedAt: null };
-    const parsed = JSON.parse(raw) as { weights: SignalWeights; savedAt: number };
+    const parsed = JSON.parse(raw) as { version?: number; weights: SignalWeights; savedAt: number };
+    // Pre-versioning saves are assumed to be schema v1 (current). Discard
+    // anything with a version higher than we know about so we don't crash
+    // on a future format the user might have.
+    if (parsed.version !== undefined && parsed.version > STORAGE_SCHEMA_VERSION) {
+      return { weights: { ...DEFAULT_WEIGHTS }, savedAt: null };
+    }
     if (!parsed?.weights || typeof parsed.weights.bb !== 'number') {
       return { weights: { ...DEFAULT_WEIGHTS }, savedAt: null };
     }
@@ -81,7 +92,7 @@ export type UseWeightLabResult = {
   save: () => void;
   clear: () => void;
   optimize: (candles: Candle[]) => void;
-  applyResult: (result: OptimizationResult) => void;
+  applyResult: (result: OptimizationResult | Individual) => void;
   WEIGHT_LABELS: Record<WeightKey, string>;
 };
 
@@ -101,11 +112,21 @@ export const useWeightLab = (): UseWeightLabResult => {
     setLastResult(loadLastResult());
   }, []);
 
-  const isCustom = (Object.keys(weights) as WeightKey[]).some(
-    (k) => Math.abs(weights[k] - DEFAULT_WEIGHTS[k]) > 1e-6
+  // isCustom / isOptimized derive from weights + lastResult. Compute once per
+  // input change so the returned object reference is stable enough for
+  // downstream useEffect deps (and for the UI badges, which re-render on
+  // every parent render otherwise).
+  const isCustom = useMemo(
+    () => (Object.keys(weights) as WeightKey[]).some(
+      (k) => Math.abs(weights[k] - DEFAULT_WEIGHTS[k]) > 1e-6
+    ),
+    [weights]
   );
-  const isOptimized = lastResult !== null && savedAt !== null && (Object.keys(lastResult.best.weights) as WeightKey[]).every(
-    (k) => Math.abs(weights[k] - lastResult!.best.weights[k]) < 1e-6
+  const isOptimized = useMemo(
+    () => lastResult !== null && savedAt !== null && (Object.keys(lastResult.best.weights) as WeightKey[]).every(
+      (k) => Math.abs(weights[k] - lastResult!.best.weights[k]) < 1e-6
+    ),
+    [weights, lastResult, savedAt]
   );
 
   const setWeight = useCallback((key: WeightKey, value: number) => {
@@ -123,7 +144,7 @@ export const useWeightLab = (): UseWeightLabResult => {
   const save = useCallback(() => {
     const ts = Date.now();
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ weights, savedAt: ts }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_SCHEMA_VERSION, weights, savedAt: ts }));
       setSavedAt(ts);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save weights');
@@ -140,8 +161,12 @@ export const useWeightLab = (): UseWeightLabResult => {
     resetToDefault();
   }, [resetToDefault]);
 
-  const applyResult = useCallback((result: OptimizationResult) => {
-    setAllWeights(result.best.weights);
+  const applyResult = useCallback((result: OptimizationResult | Individual) => {
+    // OptimizationResult wraps the best individual in `.best.weights`; an
+    // Individual carries the weight set directly on `.weights`. Normalize
+    // to the .weights shape so the caller can pass either type.
+    const weights = 'best' in result ? result.best.weights : result.weights;
+    setAllWeights(weights);
   }, [setAllWeights]);
 
   const optimize = useCallback((candles: Candle[]) => {
@@ -154,6 +179,12 @@ export const useWeightLab = (): UseWeightLabResult => {
     setProgress({ generation: 0, total: (DEFAULT_CONFIG.generations ?? 6) });
     cancelledRef.current = false;
 
+    // Defer the actual optimization to the next macrotask so the UI can
+    // commit `isRunning=true` and render the spinner before the synchronous
+    // genetic algorithm begins. 30ms is well under the 100ms perceived-
+    // latency threshold, so the spinner is visible before the work starts
+    // even on slower devices. Without this, the first 6-generation run
+    // (~200ms) can complete before React paints the new state.
     setTimeout(() => {
       try {
         const datasets: OptimizerDataset[] = [

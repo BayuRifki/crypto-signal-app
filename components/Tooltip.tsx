@@ -30,7 +30,7 @@ export default function Tooltip({ label, children, side = 'top', className = '' 
         <span
           id={id}
           role="tooltip"
-          className={`pointer-events-none absolute z-tooltip left-1/2 -translate-x-1/2 px-2 py-1 text-2xs font-medium text-fg bg-bg-card border border-line rounded shadow-elev whitespace-nowrap max-w-[240px] ${
+          className={`pointer-events-none absolute z-tooltip left-1/2 -translate-x-1/2 px-2 py-1 text-2xs font-medium text-fg bg-bg-card border border-line rounded shadow-elev whitespace-normal max-w-[min(240px,calc(100vw-2rem))] text-center ${
             side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
           }`}
         >

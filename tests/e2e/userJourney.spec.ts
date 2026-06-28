@@ -20,8 +20,8 @@ test.describe('Main user journey', () => {
     await expect(page.locator('button[role="radio"]:has-text("OKX")')).toBeVisible();
     await expect(page.locator('button[role="radio"]:has-text("Bybit")')).toBeVisible();
 
-    // Verify timeframe selector
-    await expect(page.locator('button[role="radio"]:has-text("1H")')).toBeVisible();
+    // Verify timeframe selector (now in chart toolbar)
+    await expect(page.locator('button[aria-label="Set timeframe to 1h"]')).toBeVisible();
   });
 
   test('can switch exchange', async ({ page }) => {
@@ -38,12 +38,12 @@ test.describe('Main user journey', () => {
   test('can switch timeframe', async ({ page }) => {
     await page.goto('/');
 
-    const tf4h = page.locator('button[role="radio"]:has-text("4H")');
+    const tf4h = page.locator('button[aria-label="Set timeframe to 4h"]');
     await tf4h.click();
-    await expect(tf4h).toHaveAttribute('aria-checked', 'true');
+    await expect(tf4h).toHaveClass(/bg-accent/);
 
-    const tf1h = page.locator('button[role="radio"]:has-text("1H")');
-    await expect(tf1h).toHaveAttribute('aria-checked', 'false');
+    const tf1h = page.locator('button[aria-label="Set timeframe to 1h"]');
+    await expect(tf1h).not.toHaveClass(/bg-accent/);
   });
 
   test('pair selector opens and shows options', async ({ page }) => {

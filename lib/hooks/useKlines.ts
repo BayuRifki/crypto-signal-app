@@ -23,8 +23,14 @@ const fetcher = async (key: string): Promise<FallbackResult<Candle[]>> => {
   const lim = Number(limit);
   try {
     return await fetchDirect(exchange, symbol, interval, lim);
-  } catch {
-    return await fetchProxy(exchange, symbol, interval, lim);
+  } catch (directErr) {
+    if (typeof console !== 'undefined') console.warn('[useKlines] direct failed:', directErr);
+    try {
+      return await fetchProxy(exchange, symbol, interval, lim);
+    } catch (proxyErr) {
+      if (typeof console !== 'undefined') console.error('[useKlines] proxy also failed:', proxyErr);
+      throw proxyErr;
+    }
   }
 };
 

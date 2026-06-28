@@ -72,6 +72,7 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
   // Enter or click, matching combobox/listbox conventions.
   const [activeIndex, setActiveIndex] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +81,10 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) setOpen(false);
+      if (e.key === 'Escape' && open) {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKey);
@@ -175,6 +179,7 @@ export default function PairSelector({ value, onChange, lastPrice, change24h, ex
   return (
     <div ref={wrapRef} className="relative">
       <button
+        ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="listbox"

@@ -138,10 +138,10 @@ export default function BacktestPanel({ candles, symbol, interval, weights }: Pr
         />
         <Field
           label="Cooldown"
-          value={`${cooldown}b`}
+          value={`${cooldown === 0 ? 'None' : `${cooldown}b`}`}
           current={cooldown}
           options={[
-            { label: '0b', value: 0 },
+            { label: 'None', value: 0 },
             { label: '5b', value: 5 },
             { label: '10b', value: 10 },
           ]}
@@ -150,6 +150,7 @@ export default function BacktestPanel({ candles, symbol, interval, weights }: Pr
         <button
           onClick={() => setSkipRanging(!skipRanging)}
           aria-pressed={skipRanging}
+          aria-label={`Skip ranging regime: ${skipRanging ? 'on' : 'off'}`}
           className={`p-2 rounded border text-left transition cursor-pointer min-h-[44px] ${
             skipRanging
               ? 'bg-info/15 border-info/40 text-info'
@@ -221,7 +222,7 @@ export default function BacktestPanel({ candles, symbol, interval, weights }: Pr
                 <div key={b.range} className="p-2 rounded bg-bg-elevated border border-line">
                   <div className="text-2xs text-fg-dim">{b.range}%</div>
                   <div className="text-sm font-bold tabular text-fg">{b.trades}</div>
-                  <div className={`text-2xs tabular ${b.winRate >= 50 ? 'text-buy' : b.winRate > 0 ? 'text-sell' : 'text-fg-dim'}`}>
+                  <div className={`text-2xs tabular ${b.winRate >= 50 ? 'text-info' : b.winRate > 0 ? 'text-fg-dim' : 'text-fg-dim'}`}>
                     {b.trades > 0 ? `${b.winRate.toFixed(0)}% win` : '—'}
                   </div>
                 </div>
@@ -236,9 +237,9 @@ export default function BacktestPanel({ candles, symbol, interval, weights }: Pr
                 <div key={a.action} className="p-2 rounded bg-bg-elevated border border-line">
                   <div className="flex items-center justify-between">
                     <div className="text-2xs text-fg-dim">{a.action}</div>
-                    <div className={`text-2xs font-bold ${a.action === 'BUY' ? 'text-buy' : 'text-sell'}`}>{a.trades}</div>
+                    <div className={`text-2xs font-bold ${a.action === 'BUY' ? 'text-info' : 'text-warn'}`}>{a.trades}</div>
                   </div>
-                  <div className={`text-sm font-bold tabular ${a.avgPnl >= 0 ? 'text-buy' : 'text-sell'}`}>
+                  <div className={`text-sm font-bold tabular ${a.avgPnl >= 0 ? 'text-info' : 'text-warn'}`}>
                     {a.trades > 0 ? fmtPct(a.avgPnl, true) : '—'}
                   </div>
                   <div className="text-2xs text-fg-dim tabular">
@@ -312,7 +313,7 @@ const Stat = ({
   sub?: string;
   tone: 'positive' | 'negative' | 'neutral';
 }) => {
-  const color = tone === 'positive' ? 'text-buy' : tone === 'negative' ? 'text-sell' : 'text-fg';
+  const color = tone === 'positive' ? 'text-info' : tone === 'negative' ? 'text-warn' : 'text-fg';
   return (
     <div className="p-2.5 rounded bg-bg-elevated border border-line">
       <div className="text-2xs text-fg-dim uppercase tracking-wider font-bold">{label}</div>
@@ -339,6 +340,10 @@ const EquityCurve = ({ points }: { points: { t: number; equity: number }[] }) =>
   const positive = points[points.length - 1].equity >= points[0].equity;
   const stroke = positive ? 'var(--color-buy)' : 'var(--color-sell)';
   const fill = positive ? 'var(--color-buy)' : 'var(--color-sell)';
+  // Mid-line at 50% height (acts as a baseline reference for break-even)
+  const midY = H - ((max - min) / 2 / range) * H;
+  // Y-axis: 3 grid lines at min/mid/max
+  const gridY = (v: number) => H - ((v - min) / range) * H;
   return (
     <div className="p-2.5 rounded bg-bg-elevated border border-line">
       <div className="flex items-center justify-between mb-1.5">
@@ -347,16 +352,33 @@ const EquityCurve = ({ points }: { points: { t: number; equity: number }[] }) =>
           {points[0].equity.toFixed(0)} → {points[points.length - 1].equity.toFixed(0)}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-20">
-        <defs>
-          <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={fill} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={fill} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`${path} L ${W} ${H} L 0 ${H} Z`} fill="url(#eqfill)" />
-        <path d={path} fill="none" stroke={stroke} strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
-      </svg>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-20 block">
+          <defs>
+            <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={fill} stopOpacity="0.3" />
+              <stop offset="100%" stopColor={fill} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {/* Grid lines: top, mid, bottom */}
+          <line x1="0" x2={W} y1={gridY(max)} y2={gridY(max)} stroke="var(--color-fg-dim)" strokeOpacity="0.15" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" x2={W} y1={midY} y2={midY} stroke="var(--color-fg-dim)" strokeOpacity="0.2" strokeDasharray="2 2" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" x2={W} y1={gridY(min)} y2={gridY(min)} stroke="var(--color-fg-dim)" strokeOpacity="0.15" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <path d={`${path} L ${W} ${H} L 0 ${H} Z`} fill="url(#eqfill)" />
+          <path d={path} fill="none" stroke={stroke} strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+        </svg>
+        {/* Y-axis labels overlay (absolute positioned so they don't scale with viewBox) */}
+        <div className="absolute top-0 bottom-0 left-0 w-7 pointer-events-none flex flex-col justify-between text-[9px] text-fg-dim/70 tabular py-px" aria-hidden="true">
+          <span>{max.toFixed(0)}</span>
+          <span>{((max + min) / 2).toFixed(0)}</span>
+          <span>{min.toFixed(0)}</span>
+        </div>
+        {/* X-axis: first/last time */}
+        <div className="flex justify-between text-[9px] text-fg-dim/70 tabular mt-0.5 px-7" aria-hidden="true">
+          <span>{new Date(points[0].t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          <span>{new Date(points[points.length - 1].t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+        </div>
+      </div>
     </div>
   );
 };

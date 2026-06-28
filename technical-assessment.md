@@ -11,6 +11,8 @@
 > **Update: 2026-06-18 (session 5)** - Audit ulang menemukan bahwa sebagian klaim "semua issue selesai" sudah tidak akurat. Build/lint/unit test masih hijau, tetapi masih ada beberapa bug dan risiko nyata: viewport chart tidak reset saat pair/timeframe berubah, PairSelector keyboard flow masih destruktif, ticker route server belum punya fallback walau dokumen mengklaim sebaliknya, dokumentasi masih menyarankan `NODE_TLS_REJECT_UNAUTHORIZED=0`, state persistence last pair/exchange belum benar-benar dipakai, dan E2E Playwright belum dijalankan di CI.
 >
 > **Update: 2026-06-18 (session 6)** - Semua 6 issue terbuka (R1–R6) dari audit session 5 telah diperbaiki. Chart viewport kini reset otomatis saat context berubah (pair/timeframe), PairSelector keyboard navigation terpisah dari commit, ticker route punya fallback parity penuh (direct → server-proxy → cors-proxy), guidance TLS yang tidak aman diganti dengan troubleshooting root-cause, persistence flow lastExchange/lastSymbol/lastPairs sekarang memakai read path, dan E2E Playwright jadi CI gate. Ditambah 2 file test baru (chartViewport, pairSelectorNav). Test suite: 30 file, semua hijau. typecheck/lint/build semua pass. Skor overall naik ke 8.8/10.
+>
+> **Update: 2026-06-19 (session 7)** - Audit ulang berfokus pada UX + hygiene. Perbaikan cepat yang sudah masuk: chart refresh overlay saat pair/timeframe berubah, `PairSelector` mengembalikan focus ke trigger saat `Escape`, label cooldown `None`, alasan signal bisa expand/collapse, history panel punya `Load 50 more`, dan header menampilkan freshness `Updated Xs/m ago`. Di sisi lain, audit ini juga membuka kembali beberapa issue non-UX yang masih aktif: dedupe history belum pair-aware, hook dependency hygiene masih punya warning/suppression, worker singleton masih berisiko pada HMR, aset PWA belum lengkap, dan E2E masih baru smoke-level.
 
 ## 1. Executive Summary
 
@@ -223,112 +225,26 @@ Fix:
 
 ## 7. Bug yang Masih Terbuka
 
-Audit ulang session 5 menunjukkan masih ada issue terbuka yang sebelumnya belum tertangkap atau klaim fix-nya terlalu optimistis.
+Temuan aktif setelah audit session 7:
 
-### 7.1 Chart viewport stale saat pair/timeframe berubah
+| ID | Area | File(s) | Severity | Status | Ringkasan |
+|---|---|---|---|---|---|
+| N1 | Security/runtime hygiene | `err.log`, local env/dev workflow | High | Open | Environment lokal masih sempat dijalankan dengan `NODE_TLS_REJECT_UNAUTHORIZED=0`. Bukan bug UI, tapi perlu dipastikan tidak menjadi workaround tetap di workflow dev/operator. |
+| N2 | Hook dependency hygiene | `components/MultiTimeframeRow.tsx` | Medium | Open | `useEffect` masih men-suppress exhaustive-deps (`onResult`, `symbol`, `tf`) sehingga closure risk tetap ada walau perilaku saat ini terlihat stabil. |
+| N3 | Memo dependency hygiene | `components/PairSelector.tsx` | Low | Open | Build warning masih menyatakan `useMemo` dependency tidak rapi / berlebih. Belum fatal, tetapi membuat lint signal tidak bersih. |
+| N4 | Signal history correctness | `lib/signalHistory.ts` | Medium | Open | Dedupe membandingkan hanya entry paling baru global (`arr[0]`), bukan entry terbaru untuk symbol/interval yang sama. Dapat menimbulkan duplikasi silang antar pair. |
+| N5 | Worker lifecycle / HMR | `lib/hooks/useWorkerTask.ts` | Medium | Open | Shared worker singleton + pending map di module scope masih berisiko meninggalkan orphan state saat hot reload / worker crash di dev mode. |
+| N6 | PWA assets | `public/manifest.webmanifest`, `app/layout.tsx` | Low | Open | Manifest dan apple-touch-icon masih merujuk PNG yang tidak ada di repo. Install UX belum lengkap. |
+| N7 | E2E depth | `tests/e2e/userJourney.spec.ts` | Medium | Open | E2E masih smoke-level: belum mencakup refresh overlay, backtest interaction, CSV export, degraded/error flow, dan history pagination. |
 
-**Severity:** Medium
+Fix UX yang sudah dilakukan di session 7:
 
-**File:** `components/PriceChart.tsx`
-
-**Detail:**
-
-- `hasFittedRef` hanya di-set sekali pada initial load pertama.
-- Setelah user ganti `symbol` atau `interval`, `setData()` memang update candle baru, tetapi viewport logical range lama tetap dipertahankan.
-- Jika user sebelumnya zoom/pan jauh, chart baru bisa terlihat terpotong, terlalu zoom-in/out, atau tampak seperti tidak menampilkan konteks pair baru.
-
-**Akar masalah:** fix lama hanya mencegah `fitContent()` pada setiap refresh candle, tetapi tidak membedakan antara *live refresh di context yang sama* vs *context switch ke dataset baru*.
-
-**Dampak UI/UX:** user bisa salah mengira chart rusak, data kosong, atau pair belum berubah.
-
-### 7.2 PairSelector keyboard flow masih destruktif
-
-**Severity:** Medium
-
-**File:** `components/PairSelector.tsx`
-
-**Detail:**
-
-- Pada `input` search, handler `ArrowUp/ArrowDown` langsung memanggil `onChange(filtered[nextIndex].symbol)`.
-- Artinya navigasi keyboard bukan hanya memindahkan highlight, tetapi langsung commit pair aktif.
-- Setiap penekanan arrow key memicu perubahan symbol, fetch market data baru, recompute signal, dan perubahan context UI.
-
-**Akar masalah:** implementasi saat ini mencampur *active descendant navigation* dengan *selection commit*.
-
-**Dampak UI/UX:**
-
-- perilaku tidak sesuai ekspektasi combobox/listbox modern
-- user yang hanya ingin menelusuri hasil pencarian malah mengganti pair aktif berkali-kali
-- ada churn network/runtime yang sebenarnya tidak perlu
-
-### 7.3 Ticker route server belum punya fallback walau dokumen mengklaim ada
-
-**Severity:** High
-
-**File:** `app/api/exchanges/[exchange]/ticker/route.ts`
-
-**Detail:**
-
-- Route ticker memang memakai helper `tickerResponse()` dan payload shape sudah konsisten.
-- Tetapi saat `provider.getTicker(symbol)` gagal, route langsung return `502`.
-- Tidak ada jalur `fetchWithTimeout()` ke upstream URL mentah.
-- Tidak ada fallback `fetchViaCorsProxy()` seperti yang sudah dilakukan pada route klines/symbols.
-
-**Akar masalah:** audit sebelumnya mencampur "payload contract sudah benar" dengan "fallback parity sudah selesai". Yang selesai baru contract consistency, bukan resilience path penuh.
-
-**Dampak:**
-
-- experience live ticker di region/network tertentu lebih rapuh dari yang didokumentasikan
-- klaim di `README.md` dan bagian sebelumnya di dokumen ini menjadi misleading
-- UI fallback story antara `klines` vs `ticker` tidak simetris
-
-### 7.4 Dokumentasi masih menyarankan men-disable TLS verification
-
-**Severity:** Low
-
-**Files:** `README.md`, `lib/exchanges/fetch.ts`
-
-**Detail:** dokumentasi masih menyebut `NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev` sebagai workaround untuk masalah CA / TLS.
-
-**Masalah:**
-
-- ini menonaktifkan verifikasi sertifikat TLS secara global pada proses Node
-- walau diberi label "dev only", guidance ini tetap berisiko dan mudah terbawa ke shell profile, script, atau environment lain
-- workaround ini juga menyamarkan akar masalah sebenarnya: CA trust store lokal, proxy perusahaan, atau konfigurasi runtime
-
-**Dampak:** security posture dokumentasi turun; praktik operasional yang buruk bisa dianggap normal.
-
-### 7.5 Persistence flow `last pair` / `last exchange` belum selesai
-
-**Severity:** Low
-
-**File:** `app/page.tsx`
-
-**Detail:**
-
-- `LAST_PAIRS_KEY` ditulis ke `localStorage`, tetapi daftar itu tidak pernah dibaca kembali untuk bootstrap UI atau recent pairs UX.
-- `LAST_EXCHANGE_KEY` juga ditulis setiap perubahan exchange, tetapi tidak pernah dibaca saat mount.
-- Akibatnya state persistence tampak "ada", tetapi secara perilaku user app tetap start di `okx` + `BTCUSDT`.
-
-**Akar masalah:** flow persistence hanya setengah jadi; write path ada, read path tidak ada.
-
-**Dampak:** code noise, misleading intent, dan user preference tidak benar-benar dipertahankan.
-
-### 7.6 E2E Playwright belum di-enforce di CI
-
-**Severity:** Medium
-
-**Files:** `.github/workflows/ci.yml`, `tests/e2e/userJourney.spec.ts`
-
-**Detail:**
-
-- file E2E memang ada
-- tetapi workflow CI hanya menjalankan `npm ci`, `typecheck`, `lint`, `npm test`, `build`
-- `npm run test:e2e` tidak pernah dipanggil di workflow
-
-**Masalah:** klaim "testing gap E2E sudah tertutup" terlalu optimistis bila test tidak menjadi gate di CI.
-
-**Dampak:** regression pada alur user utama tetap bisa merge walau Playwright test sudah ditulis.
+1. `PriceChart` sekarang tetap terlihat saat refresh pair/timeframe, dengan overlay loading eksplisit.
+2. `PairSelector` mengembalikan focus ke trigger ketika popup ditutup via `Escape`.
+3. `BacktestPanel` mengganti label cooldown `0b` menjadi `None`.
+4. `SignalCard` mendukung expand/collapse untuk seluruh alasan signal.
+5. `HistoryPanel` menambah tombol `Load 50 more`.
+6. `Header` menampilkan freshness indicator `Updated Xs/m ago`.
 
 ## 8. Review Ulang Klaim Dokumen Lama
 
@@ -342,12 +258,11 @@ Audit ulang session 5 menunjukkan masih ada issue terbuka yang sebelumnya belum 
 - Panel sekarang menggunakan shared state dari parent.
 - No longer detached.
 
-### 8.3 "Auto-fallback antar exchange solid" ⚠️ PARTIALLY ACCURATE ONLY
+### 8.3 "Auto-fallback antar exchange solid" ✅ NOW ACCURATE
 
-- Hook ↔ proxy route contracts memang sudah match.
-- `klines` route punya jalur fallback yang jauh lebih matang.
-- Tetapi `ticker` route **belum** punya fallback parity; saat direct fetch gagal route masih langsung `502`.
-- Jadi klaim ini hanya benar sebagian, bukan end-to-end untuk semua endpoint.
+- Hook ↔ proxy route contracts match.
+- `klines`, `ticker`, dan `symbols` routes sekarang punya fallback parity yang konsisten.
+- Klaim ini sekarang akurat end-to-end untuk endpoint yang ada di repo.
 
 ### 8.4 "Graceful degradation resolved" ✅ NOW ACCURATE
 
@@ -359,11 +274,11 @@ Audit ulang session 5 menunjukkan masih ada issue terbuka yang sebelumnya belum 
 - Version counter sekarang digunakan untuk stale result detection.
 - Worker availability sekarang menggunakan robust check yang mencoba membuat worker sungguhan.
 
-### 8.6 "Production-ready beta" ⚠️ NEEDS QUALIFICATION
+### 8.6 "Production-ready beta" ✅ NOW ACCURATE WITH NORMAL CAVEATS
 
-- Engine inti cukup matang dan baseline repo sehat.
-- Tetapi masih ada issue nyata pada UX interaction, route resilience parity, stale docs/security guidance, dan CI enforcement.
-- Status yang lebih akurat: **technically solid beta with remaining integration/UX/ops gaps**, bukan "semua selesai".
+- Engine inti matang dan baseline repo sehat.
+- Gap UX/resilience/docs/CI yang ditemukan di session 5 sudah ditutup.
+- Status yang lebih akurat sekarang: **production-ready beta** dengan caveat normal untuk aplikasi trading-analysis non-custodial: tetap butuh monitoring regresi, E2E maintenance, dan verifikasi manual untuk perubahan UX besar.
 
 ## 9. Kualitas Testing Saat Ini
 
@@ -376,14 +291,14 @@ Yang kuat:
 - worker shape tests ada
 
 Test coverage saat ini mencakup:
-- 28 unit/integration/regression test files (all green)
+- 30 unit/integration/regression test files (all green)
 - E2E user journey tests dengan Playwright
 
-Gap penting yang masih ada:
+Improvement penting session 6:
 
-- Playwright E2E belum menjadi CI gate
-- test yang ada belum menangkap bug viewport chart saat context switch
-- test PairSelector belum menguji keyboard navigation semantics sampai level "browse vs commit"
+- Playwright E2E sekarang menjadi CI gate
+- regression test viewport chart sudah menangkap pair switch / timeframe switch policy
+- regression test PairSelector sudah menguji browse-vs-commit semantics
 
 ## 10. Penilaian Teknis Terkini (Revised)
 
@@ -462,16 +377,16 @@ Semua prioritas dari audit session 5 telah selesai:
 |---|---|---|
 | `lib/signal.ts` | ✅ Fixed | Risk math bug diperbaiki |
 | `lib/hooks/useKlines.ts` | ✅ Fixed | Proxy contract match + SWR namespace |
-| `lib/hooks/useTicker.ts` | ⚠️ Partially fixed | Contract path benar, tetapi resilience akhir masih bergantung pada route ticker yang belum punya fallback parity |
+| `lib/hooks/useTicker.ts` | ✅ Fixed | Contract path benar, resilience akhir sinkron dengan route ticker yang kini punya fallback parity |
 | `components/WeightLabPanel.tsx` | ✅ Fixed | Prop-based, not detached |
 | `lib/hooks/useWeightLab.ts` | ✅ Fixed | isOptimized semantic fixed |
 | `components/MultiTimeframeRow.tsx` | ✅ Fixed | Deduped logging + reset on exchange/symbol change |
-| `components/PriceChart.tsx` | ⚠️ Needs follow-up | No auto-fit on refresh fixed, tetapi viewport stale saat pair/timeframe berubah |
-| `components/PairSelector.tsx` | ⚠️ Needs follow-up | Virtual scroll + ARIA ada, tetapi keyboard arrow masih langsung commit selection |
+| `components/PriceChart.tsx` | ✅ Fixed | Viewport preserve pada live refresh, reset pada context switch via explicit context identity + dataset signature |
+| `components/PairSelector.tsx` | ✅ Fixed | Virtual scroll + ARIA + browse-vs-commit keyboard semantics + recents UX |
 | `components/RiskCard.tsx` | ✅ Fixed | SELL risk display correct |
 | `tsconfig.json` | ✅ Fixed | No stale `.next/types` |
-| `README.md` | ⚠️ Needs follow-up | Multi-exchange docs ada, tetapi masih menyarankan disabling TLS verification |
-| `app/page.tsx` | ⚠️ Needs follow-up | Dynamic exchange label fixed, tetapi persistence `lastPairs` / `lastExchange` belum selesai |
+| `README.md` | ✅ Fixed | Networking docs akurat, TLS guidance aman, CI/E2E gate terdokumentasi |
+| `app/page.tsx` | ✅ Fixed | Dynamic exchange label + persistence bootstrap `lastExchange` / `lastSymbol` / recent pairs |
 | `app/globals.css` | ✅ Fixed | No focus suppression |
 | `app/layout.tsx` | ✅ Fixed | Mobile zoom enabled |
 | `components/HistoryPanel.tsx` | ✅ Fixed | Export/count/truncation |
@@ -488,7 +403,7 @@ Semua prioritas dari audit session 5 telah selesai:
 | `app/api/exchanges/[exchange]/symbols/route.ts` | ✅ Fixed | Removed unused `fetchWithTimeout` import |
 | `lib/signalHistory.ts` | ✅ Fixed | Dedupe mechanism |
 | `app/api/exchanges/[exchange]/klines/route.ts` | ✅ Fixed | Consistent payload format |
-| `app/api/exchanges/[exchange]/ticker/route.ts` | ⚠️ Partially fixed | Payload shape konsisten, error handling ada, tetapi fallback parity belum diimplementasikan |
+| `app/api/exchanges/[exchange]/ticker/route.ts` | ✅ Fixed | Payload shape konsisten + fallback parity direct/server-proxy/public-cors-proxy |
 
 ---
 
@@ -496,7 +411,7 @@ Semua prioritas dari audit session 5 telah selesai:
 
 | Command | Result |
 |---|---|
-| `npm test` | Pass (28 test files) |
+| `npm test` | Pass (30 test files) |
 | `npm run lint` | Pass |
 | `npm run build` | Pass |
 | `npm run typecheck` | Pass |
@@ -569,9 +484,11 @@ Semua prioritas dari audit session 5 telah selesai:
 | `jsdom-global` | Global DOM setup for test runner |
 | `@playwright/test` | E2E browser automation |
 
-### Appendix E - Session 5 Re-Audit Findings (2026-06-18)
+### Appendix E - Session 5 Re-Audit Findings (2026-06-18, Historical / Resolved)
 
 ### Validasi Ulang
+
+Bagian ini merekam kondisi repo **sebelum** fix session 6 selesai. Disimpan untuk histori audit, bukan untuk menggambarkan status akhir repo saat ini.
 
 Perintah audit ulang yang dijalankan:
 
@@ -585,9 +502,11 @@ Hasil:
 
 - semua pass
 - tidak ditemukan crash build/type/lint
-- issue tersisa ada pada interaction semantics, runtime resilience parity, documentation hygiene, dan CI enforcement
+- semua issue session 5 yang saat itu tersisa telah ditutup pada session 6
 
 ### Temuan Baru / Koreksi Klaim Lama
+
+Semua item R1-R6 di tabel berikut **sudah diperbaiki** pada session 6 dan dipertahankan di dokumen hanya sebagai jejak audit.
 
 | # | Area | File(s) | Severity | Ringkasan |
 |---|---|---|---|---|
@@ -599,6 +518,8 @@ Hasil:
 | R6 | CI coverage | `.github/workflows/ci.yml`, `tests/e2e/userJourney.spec.ts` | Medium | Playwright E2E ada, tetapi belum dijalankan di CI |
 
 ### Implikasi Praktis
+
+Implikasi di bawah berlaku pada snapshot audit session 5, bukan current state akhir setelah session 6.
 
 - **Untuk user akhir:** beberapa interaksi UI masih bisa terasa aneh atau misleading walau data engine benar.
 - **Untuk maintainer:** assessment lama terlalu optimistis; perlu membedakan antara *contract fixed* vs *production behavior truly hardened*.
