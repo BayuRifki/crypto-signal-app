@@ -24,6 +24,7 @@ import { useWeightLab } from '../lib/hooks/useWeightLab';
 import { useChartState } from '../lib/hooks/useChartState';
 import { useChartOverlays } from '../lib/hooks/useChartOverlays';
 import { useWatchlistTickers } from '../lib/hooks/useWatchlistTickers';
+import { useWebSocketStream } from '../lib/hooks/useWebSocketStream';
 import { supportResistance } from '../lib/indicators/supportResistance';
 import { Icon } from '../components/Icon';
 import ExchangeSelector from '../components/ExchangeSelector';
@@ -42,19 +43,59 @@ export default function HomePage() {
 
   const { candles, isLoading: klinesLoading, refresh: refreshKlines, error: klinesError, isDemo, demoPreset, setDemoPreset, setDemoMode, realError } = useCandleSource(exchange, symbol, interval, 500);
   const { ticker, refresh: refreshTicker } = useTicker(exchange, symbol);
-  const watchlistTickers = useWatchlistTickers(exchange);
-  const weightLab = useWeightLab();
-  const { weights: weightLabWeights, isCustom: weightLabIsCustom } = weightLab;
-  const signal = useSignal(candles, weightLabWeights, symbol, interval);
-  const srLevels = useMemo(() => {
-    if (candles.length < 50) return [];
-    const sr = supportResistance(candles, 100);
-    return [...sr.pivots, ...sr.supports, ...sr.resistances];
+
+  const [streamCandles, setStreamCandles] = useState<typeof candles>([]);
+  const [streamTicker, setStreamTicker] = useState<typeof ticker>(null);
+
+  useEffect(() => {
+    setStreamCandles(candles);
   }, [candles]);
 
   useEffect(() => {
-    if (candles.length > 0) setLastUpdate(new Date());
-  }, [candles]);
+    setStreamTicker(ticker);
+  }, [ticker]);
+
+  const handleCandleUpdate = useCallback((c: (typeof candles)[number]) => {
+    setStreamCandles((prev) => {
+      if (prev.length === 0) return [c];
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last.time === c.time) {
+        next[next.length - 1] = c;
+      } else if (c.time > last.time) {
+        next.push(c);
+        if (next.length > 500) next.shift();
+      }
+      return next;
+    });
+  }, []);
+
+  const handleTickerUpdate = useCallback((t: NonNullable<typeof ticker>) => {
+    setStreamTicker(t);
+  }, []);
+
+  const { isConnected: wsConnected } = useWebSocketStream({
+    exchange,
+    symbol,
+    interval,
+    isDemo,
+    onCandleUpdate: handleCandleUpdate,
+    onTickerUpdate: handleTickerUpdate,
+  });
+
+  const watchlistTickers = useWatchlistTickers(exchange);
+  const weightLab = useWeightLab();
+  const { weights: weightLabWeights, isCustom: weightLabIsCustom } = weightLab;
+  const signal = useSignal(streamCandles, weightLabWeights, symbol, interval);
+  const srLevels = useMemo(() => {
+    if (streamCandles.length < 50) return [];
+    const sr = supportResistance(streamCandles, 100);
+    return [...sr.pivots, ...sr.supports, ...sr.resistances];
+  }, [streamCandles]);
+
+  useEffect(() => {
+    if (streamCandles.length > 0) setLastUpdate(new Date());
+  }, [streamCandles]);
 
   const onRefresh = useCallback(() => {
     refreshKlines();
@@ -81,14 +122,14 @@ export default function HomePage() {
       id: 'backtest',
       label: 'Backtest',
       icon: <Icon.Activity size={12} />,
-      panel: <BacktestPanel candles={candles} symbol={symbol} interval={interval} weights={weightLabWeights} />,
+      panel: <BacktestPanel candles={streamCandles} symbol={symbol} interval={interval} weights={weightLabWeights} />,
     },
     {
       id: 'weightlab',
       label: 'Weight Lab',
       icon: <Icon.Box size={12} />,
       badge: weightLabIsCustom ? <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-label="custom weights active" /> : undefined,
-      panel: <WeightLabPanel candles={candles} lab={weightLab} />,
+      panel: <WeightLabPanel candles={streamCandles} lab={weightLab} />,
     },
     {
       id: 'history',
@@ -96,7 +137,7 @@ export default function HomePage() {
       icon: <Icon.Clock size={12} />,
       panel: <HistoryPanel symbol={symbol} interval={interval} />,
     },
-  ], [candles, interval, signal, srLevels, symbol, weightLabWeights, weightLabIsCustom, weightLab]);
+  ], [streamCandles, interval, signal, srLevels, symbol, weightLabWeights, weightLabIsCustom, weightLab]);
 
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col bg-bg-base pb-20 md:pb-0">
@@ -106,12 +147,13 @@ export default function HomePage() {
       <header className="shrink-0 h-11 border-b border-line bg-bg-panel flex items-center px-2 gap-2" style={{ paddingTop: 'var(--safe-top)' }}>
         <Header
             signal={signal ? { action: signal.action, confidence: signal.confidence, score: signal.score } : null}
-            ticker={ticker}
-            isLoading={klinesLoading && candles.length === 0}
-            isRefreshing={klinesLoading && candles.length > 0}
+            ticker={streamTicker}
+            isLoading={klinesLoading && streamCandles.length === 0}
+            isRefreshing={klinesLoading && streamCandles.length > 0}
             onRefresh={onRefresh}
             onOpenSettings={() => setSettingsOpen(true)}
             lastUpdate={lastUpdate}
+            wsConnected={wsConnected}
           />
         <div className="hidden md:block w-px h-5 bg-line" />
         <div className="hidden md:flex items-center gap-1.5">
@@ -119,8 +161,8 @@ export default function HomePage() {
           <PairSelector
             value={symbol}
             onChange={setSymbol}
-            lastPrice={ticker?.lastPrice ?? signal?.price ?? null}
-            change24h={ticker?.priceChangePercent ?? null}
+            lastPrice={streamTicker?.lastPrice ?? signal?.price ?? null}
+            change24h={streamTicker?.priceChangePercent ?? null}
             exchange={exchange}
             recents={recentPairs}
           />
@@ -189,7 +231,7 @@ export default function HomePage() {
               setShowMS={overlays.setShowMS}
             />
             <div className="relative flex-1 min-h-0">
-              {candles.length === 0 ? (
+              {streamCandles.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
                   <div className="w-8 h-8 border-2 border-info border-t-transparent rounded-full animate-spin-slow" />
                   <div className="text-sm text-fg-dim">Loading {symbol} {interval}…</div>
@@ -199,7 +241,7 @@ export default function HomePage() {
                   <PriceChart
                     symbol={symbol}
                     intervalLabel={interval}
-                    candles={candles}
+                    candles={streamCandles}
                     fvgs={signal?.fvgs ?? []}
                     orderBlocks={signal?.orderBlocks ?? []}
                     srLevels={srLevels}

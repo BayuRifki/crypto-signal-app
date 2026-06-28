@@ -15,6 +15,7 @@ type Props = {
   onRefresh: () => void;
   onOpenSettings: () => void;
   lastUpdate?: Date | null;
+  wsConnected?: boolean;
 };
 
 const ACTION_STYLE: Record<SignalAction, { bg: string; text: string; border: string; glow: string; dot: string }> = {
@@ -46,7 +47,7 @@ const LogoMark = () => (
   </svg>
 );
 
-export default function Header({ signal, ticker, isLoading, isRefreshing, onRefresh, onOpenSettings, lastUpdate }: Props) {
+export default function Header({ signal, ticker, isLoading, isRefreshing, onRefresh, onOpenSettings, lastUpdate, wsConnected }: Props) {
   const s = signal ? ACTION_STYLE[signal.action] : null;
   const change = ticker?.priceChangePercent ?? null;
   const up = (change ?? 0) >= 0;
@@ -83,6 +84,14 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
       {ticker && (
         <Tooltip label={`24h volume: ${fmtVol(ticker.quoteVolume)}`}>
           <div className="hidden md:flex items-center gap-2 px-2.5 h-8 rounded bg-bg-elevated border border-line">
+            {wsConnected !== undefined && (
+              <span
+                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors duration-300 ${
+                  wsConnected ? 'bg-buy shadow-[0_0_8px_#0ecb81]' : 'bg-warn animate-pulse-soft'
+                }`}
+                title={wsConnected ? 'Real-time WebSocket connected' : 'WebSocket connecting/disconnected'}
+              />
+            )}
             <span className="text-xs font-mono font-bold text-fg tabular">{fmtPrice(ticker.lastPrice)}</span>
             <span className={`text-2xs font-mono font-bold tabular ${up ? 'text-buy' : 'text-sell'}`}>
               {up ? '+' : ''}{change!.toFixed(2)}%
