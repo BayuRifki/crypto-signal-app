@@ -54,70 +54,170 @@ const EmptyMsg = ({ text }: { text: string }) => (
 const ImbalanceView = ({ price, fvgs, obs }: { price: number; fvgs: FVG[]; obs: OrderBlock[] }) => {
   const activeFVG = fvgs.filter((f) => !f.mitigated);
   if (activeFVG.length === 0 && obs.length === 0) return <EmptyMsg text="No active imbalance zones" />;
+
+  const bullishFVG = activeFVG.filter((f) => f.type === 'bullish').slice(-4);
+  const bearishFVG = activeFVG.filter((f) => f.type === 'bearish').slice(-4);
+  const bullishOB = obs.filter((o) => o.type === 'bullish').slice(-4);
+  const bearishOB = obs.filter((o) => o.type === 'bearish').slice(-4);
+
   return (
-    <div className="space-y-1.5 max-h-64 overflow-y-auto scrollbar-thin">
-      {activeFVG.slice(-6).reverse().map((f, i) => {
-        const inside = price >= f.bottom && price <= f.top;
-        return (
-          <div key={`f${i}`} className={`flex items-center gap-2 p-2 rounded text-xs ${inside ? 'bg-info/10 ring-1 ring-info/40' : 'bg-bg-elevated'}`}>
-            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${f.type === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
-              FVG
-            </span>
-            <div className="flex-1 font-mono tabular text-fg">
-              {fmtPrice(f.bottom)} → {fmtPrice(f.top)}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto scrollbar-thin pr-0.5">
+      <ZoneColumn
+        title="Bullish Zones"
+        tone="bullish"
+        fvgs={bullishFVG}
+        obs={bullishOB}
+        price={price}
+        priceLabel="below price"
+      />
+      <ZoneColumn
+        title="Bearish Zones"
+        tone="bearish"
+        fvgs={bearishFVG}
+        obs={bearishOB}
+        price={price}
+        priceLabel="above price"
+      />
+    </div>
+  );
+};
+
+const ZoneColumn = ({
+  title,
+  tone,
+  fvgs,
+  obs,
+  price,
+  priceLabel,
+}: {
+  title: string;
+  tone: 'bullish' | 'bearish';
+  fvgs: FVG[];
+  obs: OrderBlock[];
+  price: number;
+  priceLabel: string;
+}) => {
+  const isBull = tone === 'bullish';
+  const headerDot = isBull ? 'bg-buy' : 'bg-sell';
+  const headerBorder = isBull ? 'border-buy/20' : 'border-sell/20';
+  const tagStyle = isBull
+    ? 'bg-buy/15 text-buy border-buy/30'
+    : 'bg-sell/15 text-sell border-sell/30';
+
+  return (
+    <div className={`rounded border ${headerBorder} bg-bg-elevated/40 overflow-hidden`}>
+      <div className={`flex items-center justify-between px-2 py-1 border-b ${headerBorder} bg-bg-elevated`}>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${headerDot}`} aria-hidden="true" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-fg">{title}</span>
+        </div>
+        <span className="text-[9px] text-fg-dim">{priceLabel}</span>
+      </div>
+      <div className="p-1.5 space-y-1">
+        {fvgs.length === 0 && obs.length === 0 && (
+          <div className="text-[10px] text-fg-dim text-center py-2">—</div>
+        )}
+        {fvgs.map((f, i) => {
+          const inside = price >= f.bottom && price <= f.top;
+          return (
+            <div key={`f${i}`} className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] ${inside ? 'bg-info/10' : 'bg-bg-elevated'}`}>
+              <span className={`px-1 py-0.5 rounded text-[9px] font-bold border ${tagStyle}`}>FVG</span>
+              <span className="flex-1 font-mono tabular text-fg truncate">
+                {fmtPrice(f.bottom)}→{fmtPrice(f.top)}
+              </span>
+              <span className="text-[9px] tabular text-fg-dim w-10 text-right flex-shrink-0">
+                {inside ? <span className="text-info font-bold">IN</span> : `${(((price - f.midpoint) / price) * 100).toFixed(1)}%`}
+              </span>
             </div>
-            <div className="text-2xs text-fg-dim tabular w-14 text-right">
-              {inside ? <span className="text-info font-bold">INSIDE</span> : `${(((price - f.midpoint) / price) * 100).toFixed(2)}%`}
+          );
+        })}
+        {obs.map((o, i) => {
+          const inside = price >= o.bottom && price <= o.top;
+          return (
+            <div key={`o${i}`} className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] ${inside ? 'bg-info/10' : 'bg-bg-elevated'}`}>
+              <span className={`px-1 py-0.5 rounded text-[9px] font-bold border ${tagStyle}`}>OB</span>
+              <span className="flex-1 font-mono tabular text-fg truncate">
+                {fmtPrice(o.bottom)}→{fmtPrice(o.top)}
+              </span>
+              <span className="text-[9px] tabular text-fg-dim w-10 text-right flex-shrink-0">
+                {inside ? <span className="text-info font-bold">IN</span> : `${o.impulsePct.toFixed(1)}%`}
+              </span>
             </div>
-          </div>
-        );
-      })}
-      {obs.slice(-6).reverse().map((o, i) => {
-        const inside = price >= o.bottom && price <= o.top;
-        return (
-          <div key={`o${i}`} className={`flex items-center gap-2 p-2 rounded text-xs ${inside ? 'bg-info/10 ring-1 ring-info/40' : 'bg-bg-elevated'}`}>
-            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${o.type === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
-              OB
-            </span>
-            <div className="flex-1 font-mono tabular text-fg">
-              {fmtPrice(o.bottom)} → {fmtPrice(o.top)}
-            </div>
-            <div className="text-2xs text-fg-dim tabular w-14 text-right">
-              {inside ? <span className="text-info font-bold">INSIDE</span> : `Imp ${o.impulsePct.toFixed(1)}%`}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 };
 
 const StructureView = ({ signals, sweeps, price }: { signals: MSSignal[]; sweeps: Sweep[]; price: number }) => {
   if (signals.length === 0 && sweeps.length === 0) return <EmptyMsg text="No structure signals" />;
+  const bull = [...signals.filter((m) => m.direction === 'bullish'), ...sweeps.filter((s) => s.type === 'bullish')];
+  const bear = [...signals.filter((m) => m.direction === 'bearish'), ...sweeps.filter((s) => s.type === 'bearish')];
   return (
-    <div className="space-y-1.5 max-h-64 overflow-y-auto scrollbar-thin">
-      {signals.slice(-8).reverse().map((m, i) => (
-        <div key={`m${i}`} className="flex items-center gap-2 p-2 rounded bg-bg-elevated text-xs">
-          <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${m.direction === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
-            {m.type}
-          </span>
-          <span className="text-fg-muted capitalize">{m.direction}</span>
-          <span className="ml-auto font-mono tabular text-fg">{fmtPrice(m.price)}</span>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto scrollbar-thin pr-0.5">
+      <StructureColumn
+        title="Bullish Structure"
+        tone="bullish"
+        items={bull}
+        price={price}
+      />
+      <StructureColumn
+        title="Bearish Structure"
+        tone="bearish"
+        items={bear}
+        price={price}
+      />
+    </div>
+  );
+};
+
+const StructureColumn = ({
+  title,
+  tone,
+  items,
+  price,
+}: {
+  title: string;
+  tone: 'bullish' | 'bearish';
+  items: Array<MSSignal | Sweep>;
+  price: number;
+}) => {
+  const isBull = tone === 'bullish';
+  const headerDot = isBull ? 'bg-buy' : 'bg-sell';
+  const headerBorder = isBull ? 'border-buy/20' : 'border-sell/20';
+  const tagStyle = isBull
+    ? 'bg-buy/15 text-buy border-buy/30'
+    : 'bg-sell/15 text-sell border-sell/30';
+  return (
+    <div className={`rounded border ${headerBorder} bg-bg-elevated/40 overflow-hidden`}>
+      <div className={`flex items-center justify-between px-2 py-1 border-b ${headerBorder} bg-bg-elevated`}>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${headerDot}`} aria-hidden="true" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-fg">{title}</span>
         </div>
-      ))}
-      {sweeps.slice(-6).reverse().map((s, i) => {
-        const dist = ((price - s.level) / price) * 100;
-        return (
-          <div key={`s${i}`} className="flex items-center gap-2 p-2 rounded bg-bg-elevated text-xs">
-            <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${s.type === 'bullish' ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
-              SWEEP
-            </span>
-            <span className="text-fg-muted capitalize">{s.type}</span>
-            <span className="ml-auto font-mono tabular text-fg">{fmtPrice(s.level)}</span>
-            <span className="text-2xs text-fg-dim tabular w-12 text-right">{dist > 0 ? '+' : ''}{dist.toFixed(2)}%</span>
-          </div>
-        );
-      })}
+        <span className="text-[9px] text-fg-dim">{items.length} signal{items.length === 1 ? '' : 's'}</span>
+      </div>
+      <div className="p-1.5 space-y-1">
+        {items.length === 0 && <div className="text-[10px] text-fg-dim text-center py-2">—</div>}
+        {items.slice(0, 6).map((item, i) => {
+          const isMSSignal = 'time' in item;
+          const label = isMSSignal ? (item as MSSignal).type : 'SWEEP';
+          const direction = isMSSignal ? (item as MSSignal).direction : (item as Sweep).type;
+          const level = isMSSignal ? (item as MSSignal).price : (item as Sweep).level;
+          const dist = ((price - level) / price) * 100;
+          return (
+            <div key={i} className="flex items-center gap-1.5 px-1.5 py-1 rounded bg-bg-elevated text-[11px]">
+              <span className={`px-1 py-0.5 rounded text-[9px] font-bold border ${tagStyle}`}>{label}</span>
+              <span className="text-fg-muted capitalize text-[10px]">{direction}</span>
+              <span className="ml-auto font-mono tabular text-fg">{fmtPrice(level)}</span>
+              <span className="text-[9px] text-fg-dim tabular w-12 text-right flex-shrink-0">
+                {dist > 0 ? '+' : ''}{dist.toFixed(2)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -54,6 +54,21 @@ export const binanceProvider: ExchangeProvider = {
     };
   },
 
+  async getAllTickers(): Promise<Record<string, Ticker24h>> {
+    const url = `${BASE}/api/v3/ticker/24hr`;
+    const data = await fetchJson<{ symbol: string; lastPrice: string; priceChangePercent: string; quoteVolume: string }[]>(url);
+    const map: Record<string, Ticker24h> = {};
+    for (const t of data) {
+      map[toNormalizedSymbol(t.symbol)] = {
+        symbol: toNormalizedSymbol(t.symbol),
+        lastPrice: Number(t.lastPrice),
+        priceChangePercent: Number(t.priceChangePercent),
+        quoteVolume: Number(t.quoteVolume),
+      };
+    }
+    return map;
+  },
+
   async getUsdtSymbols(): Promise<SymbolInfo[]> {
     const TTL = 60 * 60 * 1000;
     if (symbolsCache && Date.now() - symbolsCache.ts < TTL) return symbolsCache.data;

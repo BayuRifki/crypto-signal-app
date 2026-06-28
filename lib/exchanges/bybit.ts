@@ -72,6 +72,23 @@ export const bybitProvider: ExchangeProvider = {
     };
   },
 
+  async getAllTickers(): Promise<Record<string, Ticker24h>> {
+    const url = `${BASE}/v5/market/tickers?category=spot`;
+    const json = await fetchJson<{ result: { list: { symbol: string; lastPrice: string; price24hPcnt: string; turnover24h: string }[] } }>(url);
+    const map: Record<string, Ticker24h> = {};
+    for (const t of json.result?.list ?? []) {
+      const sym = toNormalizedSymbol(t.symbol);
+      if (!sym.endsWith('USDT')) continue;
+      map[sym] = {
+        symbol: sym,
+        lastPrice: Number(t.lastPrice),
+        priceChangePercent: Number(t.price24hPcnt) * 100,
+        quoteVolume: Number(t.turnover24h),
+      };
+    }
+    return map;
+  },
+
   async getUsdtSymbols(): Promise<SymbolInfo[]> {
     const TTL = 60 * 60 * 1000;
     if (symbolsCache && Date.now() - symbolsCache.ts < TTL) return symbolsCache.data;

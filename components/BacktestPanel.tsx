@@ -338,8 +338,8 @@ const EquityCurve = ({ points }: { points: { t: number; equity: number }[] }) =>
     })
     .join(' ');
   const positive = points[points.length - 1].equity >= points[0].equity;
-  const stroke = positive ? 'var(--color-buy)' : 'var(--color-sell)';
-  const fill = positive ? 'var(--color-buy)' : 'var(--color-sell)';
+  const stroke = positive ? '#0ECB81' : '#F6465D';
+  const fill = positive ? '#0ECB81' : '#F6465D';
   // Mid-line at 50% height (acts as a baseline reference for break-even)
   const midY = H - ((max - min) / 2 / range) * H;
   // Y-axis: 3 grid lines at min/mid/max
@@ -361,9 +361,9 @@ const EquityCurve = ({ points }: { points: { t: number; equity: number }[] }) =>
             </linearGradient>
           </defs>
           {/* Grid lines: top, mid, bottom */}
-          <line x1="0" x2={W} y1={gridY(max)} y2={gridY(max)} stroke="var(--color-fg-dim)" strokeOpacity="0.15" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
-          <line x1="0" x2={W} y1={midY} y2={midY} stroke="var(--color-fg-dim)" strokeOpacity="0.2" strokeDasharray="2 2" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
-          <line x1="0" x2={W} y1={gridY(min)} y2={gridY(min)} stroke="var(--color-fg-dim)" strokeOpacity="0.15" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" x2={W} y1={gridY(max)} y2={gridY(max)} stroke="#5E6673" strokeOpacity="0.15" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" x2={W} y1={midY} y2={midY} stroke="#5E6673" strokeOpacity="0.2" strokeDasharray="2 2" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" x2={W} y1={gridY(min)} y2={gridY(min)} stroke="#5E6673" strokeOpacity="0.15" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
           <path d={`${path} L ${W} ${H} L 0 ${H} Z`} fill="url(#eqfill)" />
           <path d={path} fill="none" stroke={stroke} strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
         </svg>

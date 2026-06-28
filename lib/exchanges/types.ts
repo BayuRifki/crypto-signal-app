@@ -20,6 +20,8 @@ export interface ExchangeProvider {
   getKlines(symbol: string, interval: Interval, limit?: number): Promise<Candle[]>;
   /** Fetch 24h ticker stats. Symbol is in normalized form. */
   getTicker(symbol: string): Promise<Ticker24h>;
+  /** Fetch all 24h tickers at once. Returns a map of symbol → Ticker24h. */
+  getAllTickers?(): Promise<Record<string, Ticker24h>>;
   /** Fetch all tradeable USDT-quoted spot symbols in normalized form (BTCUSDT). */
   getUsdtSymbols(): Promise<SymbolInfo[]>;
 }

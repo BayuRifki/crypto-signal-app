@@ -305,9 +305,9 @@ const HistoryChart = ({
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-16">
-      <line x1={0} x2={W} y1={baselineY} y2={baselineY} stroke="var(--color-warn)" strokeWidth="0.4" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
-      <path d={meanPath} fill="none" stroke="var(--color-fg-muted)" strokeOpacity="0.4" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />
-      <path d={bestPath} fill="none" stroke="var(--color-info)" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+      <line x1={0} x2={W} y1={baselineY} y2={baselineY} stroke="#F0B90B" strokeWidth="0.4" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+      <path d={meanPath} fill="none" stroke="#848E9C" strokeOpacity="0.4" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />
+      <path d={bestPath} fill="none" stroke="#3B82F6" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 };

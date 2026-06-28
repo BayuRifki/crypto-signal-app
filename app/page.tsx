@@ -23,6 +23,7 @@ import { useCandleSource } from '../lib/hooks/useCandleSource';
 import { useWeightLab } from '../lib/hooks/useWeightLab';
 import { useChartState } from '../lib/hooks/useChartState';
 import { useChartOverlays } from '../lib/hooks/useChartOverlays';
+import { useWatchlistTickers } from '../lib/hooks/useWatchlistTickers';
 import { supportResistance } from '../lib/indicators/supportResistance';
 import { Icon } from '../components/Icon';
 import ExchangeSelector from '../components/ExchangeSelector';
@@ -41,6 +42,7 @@ export default function HomePage() {
 
   const { candles, isLoading: klinesLoading, refresh: refreshKlines, error: klinesError, isDemo, demoPreset, setDemoPreset, setDemoMode, realError } = useCandleSource(exchange, symbol, interval, 500);
   const { ticker, refresh: refreshTicker } = useTicker(exchange, symbol);
+  const watchlistTickers = useWatchlistTickers(exchange);
   const weightLab = useWeightLab();
   const { weights: weightLabWeights, isCustom: weightLabIsCustom } = weightLab;
   const signal = useSignal(candles, weightLabWeights, symbol, interval);
@@ -141,6 +143,7 @@ export default function HomePage() {
           symbol={symbol}
           recents={recentPairs}
           onSelectSymbol={setSymbol}
+          tickers={watchlistTickers}
           className="hidden md:flex"
         />
 

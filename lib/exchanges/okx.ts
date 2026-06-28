@@ -82,6 +82,26 @@ export const okxProvider: ExchangeProvider = {
     };
   },
 
+  async getAllTickers(): Promise<Record<string, Ticker24h>> {
+    const url = `${BASE}/api/v5/market/tickers?instType=SPOT`;
+    const json = await fetchJson<{ data: { instId: string; last: string; open24h: string; volCcy24h: string }[] }>(url);
+    const map: Record<string, Ticker24h> = {};
+    for (const t of json.data ?? []) {
+      const sym = toNormalizedSymbol(t.instId);
+      if (!sym.endsWith('USDT')) continue;
+      const lastPrice = Number(t.last);
+      const open24h = Number(t.open24h);
+      const changePct = open24h > 0 ? ((lastPrice - open24h) / open24h) * 100 : 0;
+      map[sym] = {
+        symbol: sym,
+        lastPrice,
+        priceChangePercent: changePct,
+        quoteVolume: Number(t.volCcy24h),
+      };
+    }
+    return map;
+  },
+
   async getUsdtSymbols(): Promise<SymbolInfo[]> {
     const TTL = 60 * 60 * 1000;
     if (symbolsCache && Date.now() - symbolsCache.ts < TTL) return symbolsCache.data;
