@@ -31,7 +31,7 @@ export default function KPIStrip({ signal, ticker }: Props) {
       label: 'Price',
       value: ticker ? fmtPrice(ticker.lastPrice) : signal ? fmtPrice(signal.price) : '-',
       sub: change !== null ? `${change >= 0 ? '+' : ''}${change.toFixed(2)}% 24h` : 'Live',
-      color: change !== null ? (change >= 0 ? 'text-info' : 'text-fg-muted') : 'text-fg',
+      color: change !== null ? (change >= 0 ? 'text-buy' : 'text-sell') : 'text-fg',
       icon: change !== null ? (change >= 0 ? <Icon.TrendUp size={13} /> : <Icon.TrendDown size={13} />) : null,
     },
     {
@@ -64,7 +64,7 @@ export default function KPIStrip({ signal, ticker }: Props) {
                 {it.icon}
                 <span>{it.label}</span>
               </div>
-              <div className={`text-xl md:text-2xl font-bold mono mt-1 font-bold ${it.color}`}>{it.value}</div>
+              <div className={`text-xl md:text-2xl font-bold font-mono tabular mt-1 ${it.color}`}>{it.value}</div>
               <div className="text-2xs text-fg-dim mt-0.5 truncate">{it.sub}</div>
             </div>
           </Tooltip>

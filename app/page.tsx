@@ -7,8 +7,6 @@ import SignalCard from '../components/SignalCard';
 import RiskCard from '../components/RiskCard';
 import IndicatorPanel from '../components/IndicatorPanel';
 import IndicatorSettings from '../components/IndicatorSettings';
-import MultiTimeframeRow from '../components/MultiTimeframeRow';
-import KPIStrip from '../components/KPIStrip';
 import StructurePanel from '../components/StructurePanel';
 import Drawer from '../components/Drawer';
 import MobileSignalButton from '../components/MobileSignalButton';
@@ -103,8 +101,8 @@ export default function HomePage() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
       {/* ── Top terminal bar ── */}
-      <header className="shrink-0 h-14 border-b border-line bg-bg-panel flex items-center px-3 gap-3">
-<Header
+      <header className="shrink-0 h-11 border-b border-line bg-bg-panel flex items-center px-2 gap-2" style={{ paddingTop: 'var(--safe-top)' }}>
+        <Header
             signal={signal ? { action: signal.action, confidence: signal.confidence, score: signal.score } : null}
             ticker={ticker}
             isLoading={klinesLoading && candles.length === 0}
@@ -113,8 +111,8 @@ export default function HomePage() {
             onOpenSettings={() => setSettingsOpen(true)}
             lastUpdate={lastUpdate}
           />
-        <div className="hidden md:block w-px h-6 bg-line mx-1" />
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:block w-px h-5 bg-line" />
+        <div className="hidden md:flex items-center gap-1.5">
           <ExchangeSelector value={exchange} onChange={setExchange} />
           <PairSelector
             value={symbol}
@@ -125,10 +123,7 @@ export default function HomePage() {
             recents={recentPairs}
           />
         </div>
-        <div className="flex-1 min-w-0 hidden lg:block">
-          <KPIStrip signal={signal} ticker={ticker} />
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           <DemoToggle
             isDemo={isDemo}
             preset={demoPreset}
@@ -152,7 +147,7 @@ export default function HomePage() {
         {/* Center: chart + multi-timeframe + bottom tabs */}
         <section className="flex-1 min-w-0 flex flex-col overflow-y-auto">
           {realError && !isDemo && !dismissError && (
-            <div className="shrink-0 card mx-3 mt-3 p-3 border-warn/40 text-xs flex items-start gap-2">
+            <div className="shrink-0 card mx-1.5 mt-1.5 p-2.5 border-warn/40 text-xs flex items-start gap-2">
               <Icon.Info size={14} className="mt-0.5 flex-shrink-0 text-warn" />
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-warn">Live data unavailable from {exchange}</div>
@@ -173,7 +168,7 @@ export default function HomePage() {
             </div>
           )}
 
-          <div className="flex-1 min-h-[320px] card overflow-hidden m-3 flex flex-col">
+          <div className="flex-1 min-h-[320px] card overflow-hidden m-1.5 flex flex-col">
             <ChartToolbar
               interval={interval}
               onIntervalChange={setInterval}
@@ -226,26 +221,22 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="shrink-0 px-3 pb-2 hidden md:block">
-            <MultiTimeframeRow symbol={symbol} activeTf={interval} exchange={exchange} onChangeTf={setInterval} />
-          </div>
-
           <BottomTabBar
             ariaLabel="Analysis panels"
             value={bottomTab}
             onChange={(v) => setBottomTab(v as typeof bottomTab)}
             tabs={bottomTabs}
-            className="shrink-0 h-64 border-t border-line"
+            className="shrink-0 h-56 border-t border-line"
           />
         </section>
 
         {/* Right signal panel */}
-        <aside className="hidden md:flex w-80 flex-col gap-3 p-3 overflow-y-auto scrollbar-thin bg-bg-panel border-l border-line">
+        <aside className="hidden md:flex w-72 flex-col gap-2 p-2 overflow-y-auto scrollbar-thin bg-bg-panel border-l border-line">
           <SignalCard signal={signal} />
           <RiskCard signal={signal} />
           <IndicatorPanel signal={signal} />
-          <div className="text-2xs text-fg-dim text-center py-2 mt-auto">
-            Data from {exchange} · Not financial advice · For analysis only
+          <div className="text-[9px] text-fg-dim text-center py-1.5 mt-auto">
+            Data from {exchange} · Not financial advice
           </div>
         </aside>
       </main>

@@ -11,8 +11,9 @@ const isValid = (id: string): id is ExchangeId => (VALID as readonly string[]).i
 const providerFor = (id: ExchangeId) =>
   exchangeList.find((e: { id: ExchangeId; name: string }) => e.id === id)!;
 
-export async function GET(_req: NextRequest, ctx: { params: { exchange: string } }) {
-  const id = ctx.params.exchange.toLowerCase();
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ exchange: string }> }) {
+  const { exchange: exchangeParam } = await ctx.params;
+  const id = exchangeParam.toLowerCase();
   if (!isValid(id)) {
     return NextResponse.json({ error: `Unknown exchange: ${id}` }, { status: 400 });
   }

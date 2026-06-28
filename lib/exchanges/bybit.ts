@@ -47,7 +47,8 @@ export const bybitProvider: ExchangeProvider = {
     const url = `${BASE}/v5/market/klines?category=spot&symbol=${toNativeSymbol(symbol)}&interval=${mapInterval(interval)}&limit=${Math.min(limit, 1000)}`;
     const json = await fetchJson<{ result: { list: string[][] } }>(url);
     const raw = json.result?.list ?? [];
-    // Bybit returns ASC (oldest first). Each row: [ts, open, high, low, close, volume, turnover]
+    // Bybit returns DESC (newest first). Each row: [ts, open, high, low, close, volume, turnover]
+    // Must reverse to ASC for lightweight-charts which requires ascending time order.
     return raw.map((r) => ({
       time: Math.floor(Number(r[0]) / 1000),
       open: Number(r[1]),
@@ -55,7 +56,7 @@ export const bybitProvider: ExchangeProvider = {
       low: Number(r[3]),
       close: Number(r[4]),
       volume: Number(r[5]),
-    }));
+    })).reverse();
   },
 
   async getTicker(symbol: string): Promise<Ticker24h> {

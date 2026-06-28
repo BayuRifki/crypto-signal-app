@@ -60,8 +60,8 @@ export default function ChartToolbar({
             aria-label={`Set timeframe to ${intv}`}
             className={
               intv === interval
-                ? 'px-2 py-1 rounded bg-accent text-fg font-medium'
-                : 'px-2 py-1 rounded bg-bg-elevated text-fg-muted hover:bg-bg-hover'
+                ? 'px-2 py-1 rounded bg-accent text-fg font-medium cursor-pointer'
+                : 'px-2 py-1 rounded bg-bg-elevated text-fg-muted hover:bg-bg-hover hover:text-fg transition-colors cursor-pointer'
             }
           >
             {intv}
@@ -84,8 +84,8 @@ export default function ChartToolbar({
               onClick={() => setToggle(!active)}
               className={
                 active
-                  ? 'px-2 py-1 rounded border bg-info/15 text-info border-info/30'
-                  : 'px-2 py-1 rounded border bg-bg-elevated text-fg-muted border-line hover:border-line-strong'
+                  ? 'px-2 py-1 rounded border bg-info/15 text-info border-info/30 cursor-pointer'
+                  : 'px-2 py-1 rounded border bg-bg-elevated text-fg-muted border-line hover:border-line-strong hover:text-fg transition-colors cursor-pointer'
               }
             >
               {label}

@@ -112,26 +112,26 @@ export default function PriceChart({
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, {
       autoSize: true,
-      layout: { background: { color: '#070b14' }, textColor: '#94a3b8', fontSize: 11 },
+      layout: { background: { color: '#0B0E11' }, textColor: '#848E9C', fontSize: 11 },
       grid: {
-        vertLines: { color: 'rgba(148,163,184,0.04)' },
-        horzLines: { color: 'rgba(148,163,184,0.04)' },
+        vertLines: { color: 'rgba(43,49,57,0.5)' },
+        horzLines: { color: 'rgba(43,49,57,0.5)' },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: '#475569', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#0d1320' },
-        horzLine: { color: '#475569', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#0d1320' },
+        vertLine: { color: '#3E454D', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#1E2329' },
+        horzLine: { color: '#3E454D', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#1E2329' },
       },
-      rightPriceScale: { borderColor: 'rgba(148,163,184,0.08)', scaleMargins: { top: 0.1, bottom: 0.1 } },
-      timeScale: { borderColor: 'rgba(148,163,184,0.08)', timeVisible: true, secondsVisible: false, rightOffset: 4, barSpacing: 7 },
+      rightPriceScale: { borderColor: '#2B3139', scaleMargins: { top: 0.08, bottom: 0.08 } },
+      timeScale: { borderColor: '#2B3139', timeVisible: true, secondsVisible: false, rightOffset: 5, barSpacing: 8 },
     });
     const series = chart.addCandlestickSeries({
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
+      upColor: '#0ECB81',
+      downColor: '#F6465D',
+      borderUpColor: '#0ECB81',
+      borderDownColor: '#F6465D',
+      wickUpColor: '#0ECB81',
+      wickDownColor: '#F6465D',
       priceLineVisible: false,
     });
     chartRef.current = chart;
@@ -190,14 +190,29 @@ export default function PriceChart({
 
   const markersData = useMemo<SeriesMarker<Time>[]>(() => {
     if (!showMS || msSignals.length === 0) return [];
-    return msSignals.slice(-20).map((m) => ({
+    // Deduplicate nearby markers: if two consecutive signals share the same
+    // type AND direction within 3 bars, keep only the latest one to reduce
+    // visual clutter on dense structure zones.
+    const raw = msSignals.slice(-30);
+    const deduped: typeof raw = [];
+    for (let i = 0; i < raw.length; i++) {
+      const prev = deduped[deduped.length - 1];
+      if (
+        prev &&
+        prev.type === raw[i].type &&
+        prev.direction === raw[i].direction &&
+        Math.abs(raw[i].time - prev.time) < (candles.length > 1 ? (candles[1].time - candles[0].time) * 3 : Infinity)
+      ) continue;
+      deduped.push(raw[i]);
+    }
+    return deduped.slice(-12).map((m) => ({
       time: m.time as Time,
       position: m.direction === 'bullish' ? 'belowBar' : 'aboveBar',
-      color: m.direction === 'bullish' ? 'var(--color-info)' : 'var(--color-warn)',
+      color: m.direction === 'bullish' ? '#3B82F6' : '#F0B90B',
       shape: m.type === 'BOS' ? 'arrowUp' : 'circle',
       text: m.type,
     }));
-  }, [msSignals, showMS]);
+  }, [msSignals, showMS, candles]);
 
   useEffect(() => {
     candleSeriesRef.current?.setMarkers(markersData);
@@ -213,8 +228,8 @@ export default function PriceChart({
     if (showBB && bbData) {
       if (!ov.bbMid) {
         ov.bbMid = chart.addLineSeries(lineOpts('#475569'));
-        ov.bbUp = chart.addLineSeries(lineOpts('var(--color-info)'));
-        ov.bbLo = chart.addLineSeries(lineOpts('var(--color-info)'));
+        ov.bbUp = chart.addLineSeries(lineOpts('#3B82F6'));
+        ov.bbLo = chart.addLineSeries(lineOpts('#3B82F6'));
       }
       const bbMidData = bbData.map((b, i) => ({ time: candles[i]?.time as Time, value: b.middle ?? NaN })).filter(d => d.time !== undefined);
       const bbUpData = bbData.map((b, i) => ({ time: candles[i]?.time as Time, value: b.upper ?? NaN })).filter(d => d.time !== undefined);
@@ -231,8 +246,8 @@ export default function PriceChart({
 
     if (showEMA && emaData) {
       if (!ov.ema50) {
-        ov.ema50 = chart.addLineSeries(lineOpts('var(--color-warn)'));
-        ov.ema200 = chart.addLineSeries(lineOpts('var(--color-accent)'));
+        ov.ema50 = chart.addLineSeries(lineOpts('#F0B90B'));
+        ov.ema200 = chart.addLineSeries(lineOpts('#6366F1'));
       }
       const ema50Data = emaData.e50.map((v, i) => ({ time: candles[i]?.time as Time, value: v ?? NaN })).filter(d => d.time !== undefined);
       const ema200Data = emaData.e200.map((v, i) => ({ time: candles[i]?.time as Time, value: v ?? NaN })).filter(d => d.time !== undefined);
@@ -259,7 +274,7 @@ export default function PriceChart({
     if (showFVG) {
       for (const f of fvgs) {
         if (f.mitigated) continue;
-        const color = f.type === 'bullish' ? '#10b981' : '#ef4444';
+        const color = f.type === 'bullish' ? '#0ECB81' : '#F6465D';
         priceLinesRef.current.push(
           addLine(f.top, color, LineStyle.Dashed, `FVG ${f.type[0].toUpperCase()}`),
           addLine(f.bottom, color, LineStyle.Dashed, '')
@@ -269,7 +284,7 @@ export default function PriceChart({
 
     if (showOB) {
       for (const o of orderBlocks) {
-        const color = o.type === 'bullish' ? '#10b981' : '#ef4444';
+        const color = o.type === 'bullish' ? '#0ECB81' : '#F6465D';
         priceLinesRef.current.push(
           addLine(o.top, color, LineStyle.Solid, `OB ${o.type === 'bullish' ? '+' : '-'}`),
           addLine(o.bottom, color, LineStyle.Solid, '')
@@ -279,7 +294,7 @@ export default function PriceChart({
 
     if (showSR) {
       for (const lvl of srLevels) {
-        const color = lvl.type === 'support' ? 'var(--color-info)' : 'var(--color-accent)';
+        const color = lvl.type === 'support' ? '#3B82F6' : '#6366F1';
         priceLinesRef.current.push(addLine(lvl.price, color, LineStyle.LargeDashed, lvl.type[0].toUpperCase()));
       }
     }

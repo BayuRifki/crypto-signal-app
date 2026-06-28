@@ -53,9 +53,9 @@ button, [role="button"] { user-select: none; }
 }
 
 .label-caps {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #5E6673;
 }
@@ -75,21 +75,20 @@ button, [role="button"] { user-select: none; }
 }
 
 .card {
-  background: #1E2329;
-  border: 1px solid #2B3139;
-  border-radius: 14px;
-  transition: border-color 150ms ease, background 150ms ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  background: #181C23;
+  border: 1px solid rgba(43, 49, 57, 0.8);
+  border-radius: 8px;
+  transition: border-color 150ms ease;
 }
 .card:hover {
   border-color: #3E454D;
 }
 
 .card-elev {
-  background: #262B32;
-  border: 1px solid #2B3139;
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background: #1E2329;
+  border: 1px solid rgba(43, 49, 57, 0.8);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .divider {
@@ -184,11 +183,11 @@ button, [role="button"] { user-select: none; }
 }
 
 .glow-buy {
-  box-shadow: 0 0 24px rgba(14, 203, 129, 0.25);
+  box-shadow: 0 0 12px rgba(14, 203, 129, 0.15);
 }
 
 .glow-sell {
-  box-shadow: 0 0 24px rgba(246, 70, 93, 0.25);
+  box-shadow: 0 0 12px rgba(246, 70, 93, 0.15);
 }
 
 @media (prefers-reduced-motion: reduce) {

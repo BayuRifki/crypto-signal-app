@@ -21,12 +21,12 @@ const sumGroup = (c: SignalComponents, keys: (keyof SignalComponents)[]) =>
 const CategoryBar = ({ value, max }: { value: number; max: number }) => {
   const pct = Math.min(100, (Math.abs(value) / max) * 100);
   return (
-    <div className="h-1.5 bg-bg-base rounded-full relative overflow-hidden">
-      <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line-strong" />
+    <div className="h-2 bg-bg-base rounded-full relative overflow-hidden">
+      <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line-strong/60" />
       <div
-        className={`absolute top-0 bottom-0 rounded-full ${value >= 0 ? 'bg-buy' : 'bg-sell'}`}
+        className={`absolute top-0 bottom-0 rounded-full transition-all duration-300 ${value >= 0 ? 'bg-buy' : 'bg-sell'}`}
         style={{
-          width: `${pct / 2}%`,
+          width: `${Math.max(2, pct / 2)}%`,
           ...(value >= 0 ? { left: '50%' } : { right: '50%' }),
         }}
       />
@@ -79,49 +79,49 @@ export default function SignalCard({ signal }: Props) {
 
   return (
     <div className={`card overflow-hidden border ${actionMeta.border} ${actionMeta.glow}`}>
-      <div className={`${actionMeta.bg} p-5 border-b ${actionMeta.border}`}>
-        <div className="flex items-start justify-between gap-3">
+      <div className={`${actionMeta.bg} px-4 py-3 border-b ${actionMeta.border}`}>
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 text-2xs text-fg-dim label-caps mb-1.5">
-              <Icon.Zap size={12} />
+            <div className="flex items-center gap-1.5 text-2xs text-fg-dim label-caps mb-1">
+              <Icon.Zap size={10} />
               <span>Signal</span>
-              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-2xs font-bold border ${regimeColor}`}>{regimeLabel}</span>
+              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${regimeColor}`}>{regimeLabel}</span>
               {hasDiv && (
-                <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold border bg-sell-soft text-sell border-sell/30">DIV</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-sell-soft text-sell border-sell/30">DIV</span>
               )}
               {hasPoc && (
-                <span className="px-1.5 py-0.5 rounded-full text-2xs font-bold border bg-info-soft text-info border-info/30">POC</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-info-soft text-info border-info/30">POC</span>
               )}
               {signal.degraded && (
                 <span
-                  className="px-1.5 py-0.5 rounded-full text-2xs font-bold border bg-warn-soft text-warn border-warn/30"
+                  className="px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-warn-soft text-warn border-warn/30"
                   title={`Degraded: ${signal.degradedIndicators.length} indicator(s) failed — ${signal.degradedIndicators.slice(0, 5).join(', ')}`}
                 >
                   DEG · {signal.degradedIndicators.length}
                 </span>
               )}
             </div>
-            <div className={`flex items-center gap-2 ${actionMeta.color}`}>
+            <div className={`flex items-center gap-1.5 ${actionMeta.color}`}>
               {actionMeta.icon}
-              <span className="text-3xl font-black tracking-tight">{action}</span>
+              <span className="text-2xl font-black tracking-tight">{action}</span>
             </div>
-            <div className="text-xs text-fg-muted mt-1.5 leading-relaxed">{actionMeta.advice}</div>
+            <div className="text-2xs text-fg-muted mt-1 leading-relaxed">{actionMeta.advice}</div>
           </div>
           <div className="text-right">
             <div className="label-caps">Confidence</div>
-            <div className={`text-2xl font-black mono font-bold mt-1 ${confidenceColor}`}>{signal.confidence}%</div>
+            <div className={`text-xl font-black font-mono tabular mt-0.5 ${confidenceColor}`}>{signal.confidence}%</div>
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <div className="flex justify-between text-2xs text-fg-dim mb-1 label-caps">
             <span>Score</span>
-            <span className="mono text-fg">{signal.score > 0 ? '+' : ''}{signal.score} / 100</span>
+            <span className="font-mono text-fg">{signal.score > 0 ? '+' : ''}{signal.score} / 100</span>
           </div>
           <div className="h-2 bg-bg-base rounded-full relative overflow-hidden">
-            <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line-strong" />
+            <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line-strong/60" />
             <div
-              className={`absolute top-0 bottom-0 ${signal.score >= 0 ? 'bg-buy' : 'bg-sell'} rounded-full`}
+              className={`absolute top-0 bottom-0 ${signal.score >= 0 ? 'bg-buy' : 'bg-sell'} rounded-full transition-all duration-300`}
               style={{
                 width: `${Math.abs(signal.score) / 2}%`,
                 ...(signal.score >= 0 ? { left: '50%' } : { right: '50%' }),
@@ -131,11 +131,10 @@ export default function SignalCard({ signal }: Props) {
         </div>
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="px-4 py-3 space-y-3">
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <div className="label-caps">Category Breakdown</div>
-            <div className="text-2xs text-fg-dim label-caps">3 groups</div>
           </div>
           <div className="space-y-2.5">
             {GROUPS.map((g) => {
@@ -161,13 +160,13 @@ export default function SignalCard({ signal }: Props) {
 
         {topReasons.length > 0 && (
           <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="label-caps">Why</div>
               {signal.reasons.length > 4 && (
                 <button
                   type="button"
                   onClick={() => setExpanded((v) => !v)}
-                  className="text-2xs text-info hover:text-fg transition label-caps"
+                  className="text-[9px] text-info hover:text-fg transition label-caps cursor-pointer"
                   aria-expanded={expanded}
                 >
                   {expanded ? 'Less' : `All (${signal.reasons.length})`}
@@ -176,8 +175,8 @@ export default function SignalCard({ signal }: Props) {
             </div>
             <ul className="space-y-1">
               {topReasons.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-fg-muted leading-relaxed">
-                  <span className={`mt-1.5 w-1 h-1 rounded-full flex-shrink-0 ${signal.score >= 0 ? 'bg-buy' : signal.score <= -1 ? 'bg-sell' : 'bg-hold'}`} />
+                <li key={i} className="flex items-start gap-1.5 text-2xs text-fg-muted leading-relaxed">
+                  <span className="mt-1 w-1 h-1 rounded-full flex-shrink-0 bg-fg-dim" />
                   <span>{r}</span>
                 </li>
               ))}
@@ -187,7 +186,7 @@ export default function SignalCard({ signal }: Props) {
 
         <div className="flex items-center justify-between pt-2 border-t border-line">
           <span className="label-caps">Entry ref</span>
-          <span className="mono text-fg font-bold">{fmtPrice(signal.price)}</span>
+          <span className="font-mono text-fg font-bold text-sm tabular">{fmtPrice(signal.price)}</span>
         </div>
       </div>
     </div>

@@ -36,7 +36,7 @@ const testKlinesDirectPayload = async () => {
     };
   });
 
-  const res = await getKlines(req('http://localhost/api/exchanges/binance/klines?symbol=BTCUSDT&interval=1h&limit=1'), { params: { exchange: 'binance' } });
+  const res = await getKlines(req('http://localhost/api/exchanges/binance/klines?symbol=BTCUSDT&interval=1h&limit=1'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { data: Array<Record<string, number>>; exchangeId: string; source: string };
 
   assert(res.status === 200, `klines direct status=200 (got ${res.status})`);
@@ -62,7 +62,7 @@ const testKlinesProxyPayload = async () => {
     };
   });
 
-  const res = await getKlines(req('http://localhost/api/exchanges/binance/klines?symbol=BTCUSDT&interval=1h&limit=1'), { params: { exchange: 'binance' } });
+  const res = await getKlines(req('http://localhost/api/exchanges/binance/klines?symbol=BTCUSDT&interval=1h&limit=1'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { data: Array<Record<string, number>>; exchangeId: string; source: string };
 
   assert(res.status === 200, `klines proxy status=200 (got ${res.status})`);
@@ -77,7 +77,7 @@ const testKlinesErrorPayload = async () => {
     throw new Error('upstream down');
   });
 
-  const res = await getKlines(req('http://localhost/api/exchanges/binance/klines?symbol=BTCUSDT&interval=1h&limit=1'), { params: { exchange: 'binance' } });
+  const res = await getKlines(req('http://localhost/api/exchanges/binance/klines?symbol=BTCUSDT&interval=1h&limit=1'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { error: string; exchangeId: string; symbol: string; interval: string };
 
   assert(res.status === 502, `klines error status=502 (got ${res.status})`);
@@ -105,7 +105,7 @@ const testTickerDirectPayload = async () => {
     };
   });
 
-  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=BTCUSDT'), { params: { exchange: 'binance' } });
+  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=BTCUSDT'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { data: Record<string, unknown>; exchangeId: string; source: string };
 
   assert(res.status === 200, `ticker direct status=200 (got ${res.status})`);
@@ -120,7 +120,7 @@ const testTickerErrorPayload = async () => {
     throw new Error('ticker blocked');
   });
 
-  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=ETHUSDT'), { params: { exchange: 'binance' } });
+  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=ETHUSDT'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { error: string; exchangeId: string; symbol: string };
 
   assert(res.status === 502, `ticker error status=502 (got ${res.status})`);
@@ -156,7 +156,7 @@ const testTickerServerProxyFallback = async () => {
     };
   });
 
-  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=BTCUSDT'), { params: { exchange: 'binance' } });
+  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=BTCUSDT'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { data: Record<string, unknown>; exchangeId: string; source: string };
 
   assert(res.status === 200, `ticker server-proxy status=200 (got ${res.status})`);
@@ -194,7 +194,7 @@ const testTickerCorsProxyFallback = async () => {
     };
   });
 
-  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=BTCUSDT'), { params: { exchange: 'binance' } });
+  const res = await getTicker(req('http://localhost/api/exchanges/binance/ticker?symbol=BTCUSDT'), { params: Promise.resolve({ exchange: 'binance' }) });
   const body = await res.json() as { data: Record<string, unknown>; exchangeId: string; source: string };
 
   assert(res.status === 200, `ticker cors-proxy status=200 (got ${res.status})`);
@@ -219,7 +219,7 @@ const testTickerOkxProxyFallback = async () => {
     };
   });
 
-  const res = await getTicker(req('http://localhost/api/exchanges/okx/ticker?symbol=BTCUSDT'), { params: { exchange: 'okx' } });
+  const res = await getTicker(req('http://localhost/api/exchanges/okx/ticker?symbol=BTCUSDT'), { params: Promise.resolve({ exchange: 'okx' }) });
   const body = await res.json() as { data: Record<string, unknown>; exchangeId: string; source: string };
 
   assert(res.status === 200, `ticker okx proxy status=200 (got ${res.status})`);

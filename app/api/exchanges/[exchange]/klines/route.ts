@@ -28,8 +28,9 @@ const klinesResponse = (exchangeId: ExchangeId, candles: Candle[], source: strin
     { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } }
   );
 
-export async function GET(req: NextRequest, ctx: { params: { exchange: string } }) {
-  const exId = ctx.params.exchange.toLowerCase() as ExchangeId;
+export async function GET(req: NextRequest, ctx: { params: Promise<{ exchange: string }> }) {
+  const { exchange: exchangeParam } = await ctx.params;
+  const exId = exchangeParam.toLowerCase() as ExchangeId;
   if (!(VALID_EX as readonly string[]).includes(exId)) {
     return NextResponse.json({ error: `Unknown exchange: ${exId}` }, { status: 400 });
   }
@@ -124,6 +125,7 @@ const parseKlinesResponse = (exId: ExchangeId, body: unknown): import('@/lib/uti
   }
   if (exId === 'bybit' && b && (b as { result?: { list?: string[][] } }).result && Array.isArray((b as { result: { list: string[][] } }).result.list)) {
     const arr = (b as { result: { list: string[][] } }).result.list;
+    // Bybit returns DESC (newest first) – reverse to ASC for chart consumption.
     return arr.map((r) => ({
       time: Math.floor(Number(r[0]) / 1000),
       open: Number(r[1]),
@@ -131,7 +133,7 @@ const parseKlinesResponse = (exId: ExchangeId, body: unknown): import('@/lib/uti
       low: Number(r[3]),
       close: Number(r[4]),
       volume: Number(r[5]),
-    }));
+    })).reverse();
   }
   return [];
 };

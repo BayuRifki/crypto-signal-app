@@ -18,12 +18,12 @@ const Metric = ({
   children: React.ReactNode;
 }) => (
   <div>
-    <div className="flex justify-between items-baseline mb-1">
-      <span className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">{label}</span>
-      <span className="text-sm font-mono font-bold tabular" style={{ color: color || '#e2e8f0' }}>{value}</span>
+    <div className="flex justify-between items-baseline mb-0.5">
+      <span className="text-[10px] text-fg-dim uppercase tracking-wider font-semibold">{label}</span>
+      <span className="text-xs font-mono font-bold tabular" style={{ color: color || '#EAECEF' }}>{value}</span>
     </div>
     {children}
-    {hint && <div className="text-2xs text-fg-dim mt-1">{hint}</div>}
+    {hint && <div className="text-[9px] text-fg-dim mt-0.5">{hint}</div>}
   </div>
 );
 
@@ -37,11 +37,11 @@ const Bar = ({ pct, color, zones }: { pct: number; color: string; zones?: { from
           left: `${z.from}%`,
           width: `${z.to - z.from}%`,
           background: z.color,
-          opacity: 0.15,
+          opacity: 0.12,
         }}
       />
     ))}
-    <div className="absolute top-0 bottom-0 left-0 rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
+    <div className="absolute top-0 bottom-0 left-0 rounded-full transition-all duration-300" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
   </div>
 );
 
@@ -49,11 +49,11 @@ const CenteredBar = ({ value, max, color }: { value: number; max: number; color:
   const pct = Math.min(50, (Math.abs(value) / max) * 50);
   return (
     <div className="h-1.5 bg-bg-base rounded-full relative">
-      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-line-strong" />
+      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-line-strong/40" />
       <div
-        className="absolute top-0 bottom-0 rounded-full"
+        className="absolute top-0 bottom-0 rounded-full transition-all duration-300"
         style={{
-          width: `${pct}%`,
+          width: `${Math.max(1, pct)}%`,
           background: color,
           ...(value >= 0 ? { left: '50%' } : { right: '50%' }),
         }}
@@ -65,15 +65,15 @@ const CenteredBar = ({ value, max, color }: { value: number; max: number; color:
 export default function IndicatorPanel({ signal }: Props) {
   if (!signal) {
     return (
-      <div className="card p-5">
-        <div className="flex items-center gap-2 text-sm text-fg-dim mb-3">
-          <Icon.Activity size={14} />
+      <div className="card p-3">
+        <div className="flex items-center gap-1.5 text-2xs text-fg-dim mb-2">
+          <Icon.Activity size={11} />
           <span>Loading indicators…</span>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           {[0, 1, 2, 3].map((i) => (
             <div key={i}>
-              <div className="shimmer h-2.5 w-12 rounded mb-1.5" />
+              <div className="shimmer h-2 w-10 rounded mb-1" />
               <div className="shimmer h-1.5 rounded" />
             </div>
           ))}
@@ -83,25 +83,25 @@ export default function IndicatorPanel({ signal }: Props) {
   }
 
   const rsi = signal.rsiValue;
-  const rsiColor = rsi === null ? 'var(--color-fg-muted)' : rsi > 70 ? 'var(--color-warn)' : rsi < 30 ? 'var(--color-accent)' : 'var(--color-info)';
-  const rsiZones = [{ from: 0, to: 30, color: 'var(--color-accent)' }, { from: 70, to: 100, color: 'var(--color-warn)' }];
+  const rsiColor = rsi === null ? '#848E9C' : rsi > 70 ? '#F0B90B' : rsi < 30 ? '#6366F1' : '#3B82F6';
+  const rsiZones = [{ from: 0, to: 30, color: '#6366F1' }, { from: 70, to: 100, color: '#F0B90B' }];
 
   const bb = signal.bbPos;
-  const bbColor = bb === null ? 'var(--color-fg-muted)' : bb < 20 ? 'var(--color-accent)' : bb > 80 ? 'var(--color-warn)' : 'var(--color-info)';
+  const bbColor = bb === null ? '#848E9C' : bb < 20 ? '#6366F1' : bb > 80 ? '#F0B90B' : '#3B82F6';
   const macdHist = signal.macdHist;
-  const macdColor = (macdHist ?? 0) > 0 ? 'var(--color-info)' : 'var(--color-warn)';
-  const cvdColor = signal.cvdSlope >= 0 ? 'var(--color-info)' : 'var(--color-warn)';
+  const macdColor = (macdHist ?? 0) > 0 ? '#3B82F6' : '#F0B90B';
+  const cvdColor = signal.cvdSlope >= 0 ? '#3B82F6' : '#F0B90B';
   const rvol = signal.rvol;
-  const rvolColor = (rvol ?? 0) >= 1.5 ? 'var(--color-buy)' : (rvol ?? 0) < 0.7 ? 'var(--color-warn)' : 'var(--color-hold)';
+  const rvolColor = (rvol ?? 0) >= 1.5 ? '#0ECB81' : (rvol ?? 0) < 0.7 ? '#F0B90B' : '#848E9C';
 
   return (
-    <div className="card p-5">
-      <div className="flex items-center gap-2 text-2xs text-fg-dim uppercase tracking-wider font-bold mb-4">
-        <Icon.Activity size={12} />
+    <div className="card px-4 py-3">
+      <div className="flex items-center gap-1.5 label-caps mb-3">
+        <Icon.Activity size={10} />
         <span>Live Indicators</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-3">
         <Metric
           label="RSI"
           value={rsi === null ? '-' : rsi.toFixed(0)}
@@ -109,13 +109,6 @@ export default function IndicatorPanel({ signal }: Props) {
           hint={rsi === null ? 'Waiting' : rsi > 70 ? 'Overbought' : rsi < 30 ? 'Oversold' : 'Neutral'}
         >
           <Bar pct={rsi ?? 0} color={rsiColor} zones={rsiZones} />
-          <div className="flex justify-between text-[9px] text-fg-dim/70 tabular mt-0.5 px-px" aria-hidden="true">
-            <span>0</span>
-            <span>30</span>
-            <span>50</span>
-            <span>70</span>
-            <span>100</span>
-          </div>
         </Metric>
 
         <Metric
@@ -146,38 +139,38 @@ export default function IndicatorPanel({ signal }: Props) {
         </Metric>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-4 mt-4 border-t border-line">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-3 mt-3 border-t border-line">
         <Tooltip label="EMA 50 (medium-term trend)">
-          <div className="cursor-help hover:bg-bg-panel rounded -m-1 p-1 transition">
-            <div className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">EMA 50</div>
-            <div className="text-base font-mono font-bold text-warn tabular mt-0.5">{fmtPrice(signal.ema50)}</div>
+          <div className="cursor-help">
+            <div className="text-[10px] text-fg-dim uppercase tracking-wider font-semibold">EMA 50</div>
+            <div className="text-sm font-mono font-bold text-warn tabular">{fmtPrice(signal.ema50)}</div>
           </div>
         </Tooltip>
         <Tooltip label="EMA 200 (long-term trend)">
-          <div className="cursor-help hover:bg-bg-panel rounded -m-1 p-1 transition">
-            <div className="text-2xs text-fg-dim uppercase tracking-wider font-semibold">EMA 200</div>
-            <div className="text-base font-mono font-bold text-accent tabular mt-0.5">{fmtPrice(signal.ema200)}</div>
+          <div className="cursor-help">
+            <div className="text-[10px] text-fg-dim uppercase tracking-wider font-semibold">EMA 200</div>
+            <div className="text-sm font-mono font-bold text-accent tabular">{fmtPrice(signal.ema200)}</div>
           </div>
         </Tooltip>
       </div>
 
-      <div className="flex items-center justify-between pt-3 mt-3 border-t border-line text-xs">
-        <Tooltip label="ADX: Average Directional Index · ≥25 trending, <20 ranging">
+      <div className="flex items-center justify-between pt-2 mt-2 border-t border-line text-2xs">
+        <Tooltip label="ADX: Average Directional Index">
           <span className="text-fg-dim cursor-help">ADX (14)</span>
         </Tooltip>
         <span className="font-mono font-bold tabular">
-              <span style={{ color: signal.adx === null ? 'var(--color-fg-muted)' : signal.adx >= 25 ? 'var(--color-accent)' : signal.adx < 20 ? 'var(--color-warn)' : 'var(--color-hold)' }}>
+          <span style={{ color: signal.adx === null ? '#848E9C' : signal.adx >= 25 ? '#6366F1' : signal.adx < 20 ? '#F0B90B' : '#848E9C' }}>
             {signal.adx === null ? '-' : signal.adx.toFixed(0)}
           </span>
           {signal.adx !== null && (
-            <span className="text-2xs text-fg-dim ml-1.5">
-              · {signal.regime === 'trending' ? (signal.regimeBias === 'bullish' ? '↑' : '↓') : signal.regime === 'ranging' ? '⊥' : '→'}
+            <span className="text-[9px] text-fg-dim ml-1">
+              {signal.regime === 'trending' ? (signal.regimeBias === 'bullish' ? '↑' : '↓') : signal.regime === 'ranging' ? '⊥' : '→'}
             </span>
           )}
         </span>
       </div>
 
-      <div className="flex items-center justify-between pt-2 text-xs">
+      <div className="flex items-center justify-between pt-1.5 text-2xs">
         <Tooltip label="Relative Volume: current vs 20-period average">
           <span className="text-fg-dim cursor-help">RVOL (20)</span>
         </Tooltip>

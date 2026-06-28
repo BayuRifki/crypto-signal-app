@@ -26,8 +26,9 @@ const tryWithCorsProxy = async (url: string): Promise<Response | null> => {
   }
 };
 
-export async function GET(req: NextRequest, ctx: { params: { exchange: string } }) {
-  const exId = ctx.params.exchange.toLowerCase() as ExchangeId;
+export async function GET(req: NextRequest, ctx: { params: Promise<{ exchange: string }> }) {
+  const { exchange: exchangeParam } = await ctx.params;
+  const exId = exchangeParam.toLowerCase() as ExchangeId;
   if (!(VALID_EX as readonly string[]).includes(exId)) {
     return NextResponse.json({ error: `Unknown exchange: ${exId}` }, { status: 400 });
   }

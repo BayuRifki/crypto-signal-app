@@ -69,77 +69,71 @@ export default function Header({ signal, ticker, isLoading, isRefreshing, onRefr
   })();
 
   return (
-    <header className="z-header backdrop-blur bg-bg-panel/95 border-b border-line" style={{ paddingTop: 'var(--safe-top)' }}>
-      <div className="max-w-[1600px] mx-auto px-3 md:px-5 h-14 flex items-center gap-3">
-        <div className="flex items-center gap-2.5 mr-2">
-          <div className="w-8 h-8 rounded-md bg-bg-elevated border border-line flex items-center justify-center flex-shrink-0">
-            <LogoMark />
-          </div>
-          <div className="hidden md:block">
-            <div className="text-sm font-bold text-fg leading-none tracking-tight">AURORA</div>
-            <div className="text-2xs text-fg-dim leading-none mt-0.5 label-caps">Terminal</div>
-          </div>
+    <>
+      <div className="flex items-center gap-2.5 mr-2 flex-shrink-0">
+        <div className="w-7 h-7 rounded bg-bg-elevated border border-line flex items-center justify-center flex-shrink-0">
+          <LogoMark />
         </div>
-
-        <div className="h-6 w-px bg-line hidden md:block" />
-
-        {ticker && (
-          <Tooltip label={`24h volume: ${fmtVol(ticker.quoteVolume)}`}>
-            <div className="hidden md:flex items-center gap-2.5 px-3.5 h-9 rounded-md bg-bg-elevated border border-line">
-              <span className="text-sm mono font-bold text-fg">{fmtPrice(ticker.lastPrice)}</span>
-              <span className={`text-xs mono font-bold ${up ? 'text-info' : 'text-fg-muted'}`}>
-                {up ? '+' : ''}{change!.toFixed(2)}%
-              </span>
-              <span className="text-2xs text-fg-dim mono tabular hidden lg:inline">Vol {fmtVol(ticker.quoteVolume)}</span>
-            </div>
-          </Tooltip>
-        )}
-
-        <div className="flex-1 min-w-0" />
-
-        {signal && s && (
-          <Tooltip label={`${signal.action} signal · ${signal.confidence}% confidence · score ${signal.score > 0 ? '+' : ''}${signal.score}`}>
-            <div className={`flex items-center gap-2 px-3 h-9 rounded-md border ${s.bg} ${s.border}/40 cursor-help transition ${signal.action !== 'HOLD' ? s.glow : ''}`}>
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot} animate-pulse-soft`} />
-              <span className={`text-xs font-black tracking-widest text-fg ${s.text}`}>{signal.action}</span>
-              <span className={`w-px h-3 bg-current ${s.border}/30`} aria-hidden="true" />
-              <span className={`text-xs mono tabular ${s.text} opacity-90`}>{signal.confidence}%</span>
-            </div>
-          </Tooltip>
-        )}
-        {!signal && !isLoading && <Badge variant="neutral" size="md">NO SIGNAL</Badge>}
-        {isLoading && <Badge variant="info" size="md" dot>SCANNING</Badge>}
-
-        <div className="flex items-center gap-2">
-          {lastUpdateAge && !isLoading && (
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 h-9 rounded-md bg-bg-elevated border border-line text-2xs text-fg-dim mono tabular">
-              <span className="w-1.5 h-1.5 rounded-full bg-info" />
-              {lastUpdateAge}
-            </div>
-          )}
-          <div className="flex items-center gap-1">
-            <Tooltip label={lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Refresh data'}>
-              <button
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                aria-label="Refresh data"
-                className="w-9 h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:text-fg transition disabled:opacity-50"
-              >
-                <Icon.Refresh size={15} className={`transition-transform ${isRefreshing ? 'animate-spin-slow' : ''}`} />
-              </button>
-            </Tooltip>
-            <Tooltip label="Settings">
-              <button
-                onClick={onOpenSettings}
-                aria-label="Open settings"
-                className="w-9 h-9 flex items-center justify-center rounded-md bg-bg-elevated border border-line hover:border-line-strong hover:text-fg transition"
-              >
-                <Icon.Settings size={15} />
-              </button>
-            </Tooltip>
-          </div>
+        <div className="hidden md:block">
+          <div className="text-xs font-bold text-fg leading-none tracking-tight">AURORA</div>
+          <div className="text-[9px] text-fg-dim leading-none mt-0.5 label-caps">Terminal</div>
         </div>
       </div>
-    </header>
+
+      {ticker && (
+        <Tooltip label={`24h volume: ${fmtVol(ticker.quoteVolume)}`}>
+          <div className="hidden md:flex items-center gap-2 px-2.5 h-8 rounded bg-bg-elevated border border-line">
+            <span className="text-xs font-mono font-bold text-fg tabular">{fmtPrice(ticker.lastPrice)}</span>
+            <span className={`text-2xs font-mono font-bold tabular ${up ? 'text-buy' : 'text-sell'}`}>
+              {up ? '+' : ''}{change!.toFixed(2)}%
+            </span>
+            <span className="text-[10px] text-fg-dim font-mono tabular hidden lg:inline">Vol {fmtVol(ticker.quoteVolume)}</span>
+          </div>
+        </Tooltip>
+      )}
+
+      <div className="flex-1 min-w-0" />
+
+      {signal && s && (
+        <Tooltip label={`${signal.action} signal · ${signal.confidence}% confidence · score ${signal.score > 0 ? '+' : ''}${signal.score}`}>
+          <div className={`flex items-center gap-1.5 px-2.5 h-8 rounded border ${s.bg} ${s.border}/40 cursor-help transition ${signal.action !== 'HOLD' ? s.glow : ''}`}>
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot} animate-pulse-soft`} />
+            <span className={`text-2xs font-black tracking-widest ${s.text}`}>{signal.action}</span>
+            <span className={`w-px h-3 ${s.border}/20`} aria-hidden="true" />
+            <span className={`text-2xs font-mono tabular ${s.text} opacity-90`}>{signal.confidence}%</span>
+          </div>
+        </Tooltip>
+      )}
+      {!signal && !isLoading && <Badge variant="neutral" size="md">NO SIGNAL</Badge>}
+      {isLoading && <Badge variant="info" size="md" dot>SCANNING</Badge>}
+
+      <div className="flex items-center gap-1.5">
+        {lastUpdateAge && !isLoading && (
+          <div className="hidden md:flex items-center gap-1.5 px-2 h-8 rounded bg-bg-elevated border border-line text-[10px] text-fg-dim font-mono tabular">
+            <span className="w-1.5 h-1.5 rounded-full bg-buy" />
+            {lastUpdateAge}
+          </div>
+        )}
+        <Tooltip label={lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Refresh data'}>
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            aria-label="Refresh data"
+            className="w-8 h-8 flex items-center justify-center rounded bg-bg-elevated border border-line hover:border-line-strong hover:text-fg transition disabled:opacity-50 cursor-pointer"
+          >
+            <Icon.Refresh size={13} className={`transition-transform ${isRefreshing ? 'animate-spin-slow' : ''}`} />
+          </button>
+        </Tooltip>
+        <Tooltip label="Settings">
+          <button
+            onClick={onOpenSettings}
+            aria-label="Open settings"
+            className="w-8 h-8 flex items-center justify-center rounded bg-bg-elevated border border-line hover:border-line-strong hover:text-fg transition cursor-pointer"
+          >
+            <Icon.Settings size={13} />
+          </button>
+        </Tooltip>
+      </div>
+    </>
   );
 }
